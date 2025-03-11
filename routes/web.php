@@ -21,3 +21,12 @@ Route::get('{any}', function () {
     return view('app');
 })->where('any', '.*');
 
+// Ruta para el panel de administración
+Route::get('/admin{any}', function () {
+    return view('welcome');
+})->where('any', '.*');
+
+// Ruta para la tienda
+Route::get('/{any}', function () {
+    return view('tienda');
+})->where('any', '.*');

@@ -9,11 +9,10 @@ class Product extends Model
 {
     use HasFactory;
 
-    
     protected $fillable = [
         'name',
-        'price',
         'description',
+        'price',
         'stock',
         'category_id',
         'image'
@@ -24,13 +23,15 @@ class Product extends Model
         return $this->belongsTo(Category::class);
     }
 
+    public function orderItems()
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+
     public function decreaseStock($quantity)
     {
-        if ($this->stock >= $quantity) {
-            $this->stock -= $quantity;
-            $this->save();
-            return true;
-        }
-        return false;
+        $this->stock -= $quantity;
+        $this->save();
+        return $this;
     }
 }

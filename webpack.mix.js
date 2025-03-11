@@ -1,18 +1,17 @@
 const mix = require('laravel-mix');
-
-/*
- |--------------------------------------------------------------------------
- | Mix Asset Management
- |--------------------------------------------------------------------------
- |
- | Mix provides a clean, fluent API for defining some Webpack build steps
- | for your Laravel applications. By default, we are compiling the CSS
- | file for the application as well as bundling up all the JS files.
- |
- */
+const path = require('path'); // Import the path module
 
 mix.js('resources/js/app.js', 'public/js')
-    .postCss('resources/css/app.css', 'public/css', [
-        //
-    ]).vue();
-
+   .js('resources/js/client-app.js', 'public/js')
+   .vue()
+   .postCss('resources/css/app.css', 'public/css', [
+       // Aquí puedes agregar plugins de PostCSS si los usas
+   ])
+   .webpackConfig({
+       resolve: {
+           alias: {
+               // Esto puede ayudar con algunas importaciones
+               '@': path.resolve('resources/js'),
+           },
+       },
+   });

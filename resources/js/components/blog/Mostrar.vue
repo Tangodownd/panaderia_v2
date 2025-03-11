@@ -172,9 +172,7 @@ import { ref, computed, onMounted, nextTick, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import axios from 'axios';
 import $ from 'jquery';
-import 'datatables.net-dt/css/dataTables.dataTables.css';
-import 'datatables.net';
-import 'bootstrap/dist/css/bootstrap.min.css';
+// Eliminadas las importaciones de CSS
 import { Modal } from 'bootstrap';
 import QRCode from 'qrcode';
 import JsBarcode from 'jsbarcode';
@@ -488,3 +486,4 @@ window.verDetalles = verDetalles;
   outline-offset: 2px;
 }
 </style>
+
