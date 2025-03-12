@@ -42,10 +42,36 @@
         .border-brown {
             border-color: #8B4513;
         }
+        .admin-link {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #8B4513;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 50px;
+            text-decoration: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+        .admin-link:hover {
+            background-color: #6B3E0A;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+        }
     </style>
 </head>
 <body>
     <div id="client-app"></div>
+    
+    <!-- Admin Link -->
+    <a href="/admin/login" class="admin-link">
+        <i class="fas fa-user-shield me-2"></i> Admin
+    </a>
     
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -53,3 +79,4 @@
     <script src="{{ mix('js/client-app.js') }}"></script>
 </body>
 </html>
+

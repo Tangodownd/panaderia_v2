@@ -7,9 +7,12 @@ import DashboardHome from "./components/admin/DashboardHome.vue"
 import Mostrar from "./components/blog/Mostrar.vue"
 import Crear from "./components/blog/Crear.vue"
 import Editar from "./components/blog/Editar.vue"
+import AdminUsers from "./components/admin/AdminUsers.vue"
+
+// Importamos un componente para categorías (crearemos este archivo después)
+import AdminCategories from "./components/admin/AdminCategories.vue"
 
 const routes = [
-  // Rutas de administración
   {
     path: "/admin/login",
     name: "adminLogin",
@@ -17,16 +20,15 @@ const routes = [
   },
   {
     path: "/admin",
-    redirect: "/admin/login", // Redirigir /admin a /admin/login si no está autenticado
+    redirect: "/admin/dashboard",
   },
   {
     path: "/admin/dashboard",
-    name: "adminDashboard",
     component: Dashboard,
     children: [
       {
         path: "",
-        name: "adminHome",
+        name: "adminDashboard",
         component: DashboardHome,
       },
       {
@@ -45,6 +47,17 @@ const routes = [
         component: Editar,
         props: true,
       },
+      {
+        path: "administradores",
+        name: "adminUsers",
+        component: AdminUsers,
+      },
+      // Agregamos la ruta faltante para categorías
+      {
+        path: "categorias",
+        name: "adminCategories",
+        component: AdminCategories,
+      },
     ],
   },
 ]
@@ -52,34 +65,20 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
-  scrollBehavior(to, from, savedPosition) {
-    if (savedPosition) {
-      return savedPosition
-    } else if (to.hash) {
-      return {
-        el: to.hash,
-        behavior: "smooth",
-      }
-    } else {
-      return { top: 0 }
-    }
-  },
 })
-
-// Inicializar autenticación
-import auth from "./services/auth"
-auth.initializeAuth()
 
 // Middleware global para proteger rutas
 router.beforeEach((to, from, next) => {
   // Si la ruta incluye /admin/dashboard y el usuario no está autenticado
-  if (to.path.includes("/admin/dashboard") && !auth.isAuthenticated()) {
-    next({ name: "adminLogin" })
-  } else {
-    next()
+  if (to.path.includes("/admin/dashboard")) {
+    const token = localStorage.getItem("auth_token")
+    if (!token) {
+      next({ name: "adminLogin" })
+      return
+    }
   }
+  next()
 })
 
 export default router
-export { routes }
 

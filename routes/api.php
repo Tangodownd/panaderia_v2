@@ -4,8 +4,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\BlogController;
 use App\Http\Controllers\CategoryController;
-use App\Http\Controllers\OrderController;
-use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AdminUserController;
 
 /*
 |--------------------------------------------------------------------------
@@ -18,26 +19,36 @@ use App\Http\Controllers\Api\ProductController;
 |
 */
 
+// Rutas públicas
+Route::post('/login', [AuthController::class, 'login']);
+Route::get('/blog', [BlogController::class, 'index']);
+Route::get('/blog/{id}', [BlogController::class, 'show']);
+Route::get('/categories', [CategoryController::class, 'index']);
+
+// Rutas protegidas
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/logout', [AuthController::class, 'logout']);
+    
+    // Rutas de administración
+    Route::post('/blog', [BlogController::class, 'store']);
+    Route::post('/blog/{id}', [BlogController::class, 'update']);
+    Route::delete('/blog/{id}', [BlogController::class, 'destroy']);
+    Route::post('/blog/{id}/review', [BlogController::class, 'addReview']);
+    
+    Route::post('/categories', [CategoryController::class, 'store']);
+    Route::put('/categories/{id}', [CategoryController::class, 'update']);
+    Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
+    
+    Route::get('/admin/stats', [AdminController::class, 'getStats']);
+    Route::get('/admin/orders/recent', [AdminController::class, 'getRecentOrders']);
+    
+    // Rutas para administradores
+    Route::get('/admin/users', [AdminUserController::class, 'index']);
+    Route::post('/admin/users', [AdminUserController::class, 'store']);
+    Route::delete('/admin/users/{id}', [AdminUserController::class, 'destroy']);
+});
+
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-// Rutas para órdenes
-Route::post('/orders', [OrderController::class, 'store']);
-Route::get('/orders', [OrderController::class, 'index']);
-Route::get('/orders/{order}', [OrderController::class, 'show']);
-
-// Rutas para productos
-Route::apiResource('products', ProductController::class)->only(['index', 'show']);
-Route::apiResource('products', ProductController::class)->except(['index', 'show'])->middleware(['auth:sanctum', 'admin']);
-
-//de esta forma nos genera todas las rutas
-Route::get('/blog', [BlogController::class, 'index']);
-Route::resource('blog', BlogController::class);
-Route::resource('blog',App\Http\Controllers\BlogController::class);
-Route::resource('categories', CategoryController::class);
-Route::get('/categories', [BlogController::class, 'getCategories']);
-Route::get('/products/category/{category}', [BlogController::class, 'getProductsByCategory']);
-Route::apiResource('blog', BlogController::class);
-Route::apiResource('categories', CategoryController::class);
-Route::post('/blog/{blog}/review', [BlogController::class, 'addReview']);
