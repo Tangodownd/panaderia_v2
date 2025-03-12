@@ -1,489 +1,337 @@
 <template>
   <div class="container-fluid py-4 bg-beige text-brown">
-    <div class="row mb-4">
-      <div class="col-12">
-        <div class="card bg-light-beige text-brown border-brown">
-          <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-              <h2 class="card-title mb-0 text-brown">Productos de Panadería</h2>
-              <router-link :to="{ name: 'crearBlog' }" class="btn btn-brown">
-                <i class="fas fa-plus-circle me-2"></i>Añadir Producto
-              </router-link>
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card bg-light-beige text-brown border-brown">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="card-title mb-0 text-brown">Productos de Panadería</h2>
+            <router-link :to="{ name: 'crearBlog' }" class="btn btn-brown">
+              <i class="fas fa-plus-circle me-2"></i>Añadir Producto
+            </router-link>
+          </div>
+          <div class="row g-3 mb-4">
+            <div class="col-md-4">
+              <input type="search" class="form-control bg-beige text-brown border-brown" placeholder="Buscar" v-model="searchQuery" @input="filterTable">
             </div>
-            <div class="row g-3 mb-4">
-              <div class="col-md-4">
-                <input type="search" class="form-control bg-beige text-brown border-brown" placeholder="Buscar" v-model="searchQuery" @input="filterTable">
-              </div>
-              <div class="col-md-4">
-                <select class="form-select bg-beige text-brown border-brown" v-model="selectedCategory" @change="filterTable">
-                  <option value="">Todas las Categorías</option>
-                  <option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option>
-                </select>
-              </div>
-              <div class="col-md-4">
-                <select class="form-select bg-beige text-brown border-brown" v-model="sortBy" @change="filterTable">
-                  <option value="">Ordenar por</option>
-                  <option value="id">ID</option>
-                  <option value="titulo">Nombre</option>
-                  <option value="category">Categoría</option>
-                  <option value="precio">Precio</option>
-                </select>
-              </div>
+            <div class="col-md-4">
+              <select class="form-select bg-beige text-brown border-brown" v-model="selectedCategory" @change="filterTable">
+                <option value="">Todas las Categorías</option>
+                <option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option>
+              </select>
             </div>
-            <div class="table-responsive">
-              <table id="blogsTable" class="table table-hover">
-                <thead class="bg-brown text-beige">
-                  <tr>
-                    <th>ID</th>
-                    <th>Nombre</th>
-                    <th>Categoría</th>
-                    <th>Precio</th>
-                    <th>Stock</th>
-                    <th>Marca</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-              </table>
+            <div class="col-md-4">
+              <select class="form-select bg-beige text-brown border-brown" v-model="sortBy" @change="filterTable">
+                <option value="">Ordenar por</option>
+                <option value="id">ID</option>
+                <option value="name">Nombre</option>
+                <option value="category">Categoría</option>
+                <option value="price">Precio</option>
+              </select>
             </div>
+          </div>
+          <div class="table-responsive">
+            <table id="productsTable" class="table table-hover">
+              <thead class="bg-brown text-beige">
+                <tr>
+                  <th>ID</th>
+                  <th>Nombre</th>
+                  <th>Categoría</th>
+                  <th>Precio</th>
+                  <th>Stock</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(product, index) in filteredProducts" :key="product.id">
+                  <td>{{ product.id }}</td>
+                  <td>{{ product.name }}</td>
+                  <td>{{ product.category ? product.category.name : 'Sin categoría' }}</td>
+                  <td>${{ parseFloat(product.price).toFixed(2) }}</td>
+                  <td>{{ product.stock }}</td>
+                  <td>
+                    <div class="btn-group" role="group">
+                      <router-link :to="{ name: 'editarBlog', params: { id: product.id } }" class="btn btn-sm btn-outline-brown">
+                        <i class="fas fa-edit"></i>
+                      </router-link>
+                      <button type="button" class="btn btn-sm btn-outline-danger" @click="borrarProducto(product.id)">
+                        <i class="fas fa-trash"></i>
+                      </button>
+                      <button type="button" class="btn btn-sm btn-outline-brown" @click="verDetalles(index)">
+                        <i class="fas fa-eye"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
     </div>
   </div>
-
+  </div>
+  
   <!-- Modal para ver detalles -->
   <div class="modal fade" id="detallesModal" tabindex="-1" aria-labelledby="detallesModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content bg-beige text-brown">
-        <div class="modal-header bg-brown text-beige">
-          <h5 class="modal-title" id="detallesModalLabel">Detalles del Producto</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <div class="row">
-            <div class="col-md-6">
-              <p><strong>ID:</strong> {{ blogSeleccionado.id }}</p>
-              <p><strong>Nombre:</strong> {{ blogSeleccionado.titulo }}</p>
-              <p><strong>Categoría:</strong> {{ blogSeleccionado.category ? blogSeleccionado.category.name : 'Sin categoría' }}</p>
-              <p><strong>Descripción:</strong> {{ blogSeleccionado.contenido }}</p>
-              <p><strong>Precio:</strong> ${{ blogSeleccionado.precio }}</p>
-              <p><strong>Descuento:</strong> {{ blogSeleccionado.descuento }}%</p>
-              <p><strong>Valoración:</strong> {{ '⭐'.repeat(Math.round(blogSeleccionado.valoracion)) }}</p>
-              <p><strong>Stock:</strong> {{ blogSeleccionado.stock }}</p>
-              <p><strong>Marca:</strong> {{ blogSeleccionado.brand }}</p>
-              <p><strong>SKU:</strong> {{ blogSeleccionado.sku }}</p>
-              <p><strong>Peso:</strong> {{ blogSeleccionado.weight }} kg</p>
-              <p><strong>Dimensiones:</strong> {{ blogSeleccionado.dimensions ? `${blogSeleccionado.dimensions.width} x ${blogSeleccionado.dimensions.height} x ${blogSeleccionado.dimensions.depth} cm` : 'N/A' }}</p>
-              <p><strong>Garantía:</strong> {{ blogSeleccionado.warrantyInformation }}</p>
-              <p><strong>Envío:</strong> {{ blogSeleccionado.shippingInformation }}</p>
-              <p><strong>Disponibilidad:</strong> {{ blogSeleccionado.availabilityStatus }}</p>
-              <p><strong>Política de devolución:</strong> {{ blogSeleccionado.returnPolicy }}</p>
-              <p><strong>Cantidad mínima de pedido:</strong> {{ blogSeleccionado.minimumOrderQuantity }}</p>
-              <p><strong>Etiquetas:</strong> {{ blogSeleccionado.etiquetas ? blogSeleccionado.etiquetas.join(', ') : 'Sin etiquetas' }}</p>
-            </div>
-
-              <div class="row mb-3">
-                <h6>QR Code</h6>
-                <canvas :id="'qrcode-modal-' + blogSeleccionado.id"></canvas>
-              </div>
-              <div>
-                <h6>Barcode</h6>
-                <svg :id="'barcode-modal-' + blogSeleccionado.id"></svg>
-              </div>
-              <div class="col-md-6">
-              <div v-if="blogSeleccionado.thumbnail" class="mb-3">
-                <h6>Imagen del Producto</h6>
-                <img 
-                  :src="getThumbnailUrl(blogSeleccionado.thumbnail)" 
-                  class="img-fluid" 
-                  alt="Thumbnail" 
-                  @error="handleImageError"
-                  v-show="imageLoaded"
-                  @load="handleImageLoad"
-                >
-                <div v-if="!imageLoaded && !imageError" class="text-center">
-                  <div class="spinner-border text-brown" role="status">
-                    <span class="visually-hidden">Cargando imagen...</span>
-                  </div>
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-beige text-brown">
+      <div class="modal-header bg-brown text-beige">
+        <h5 class="modal-title" id="detallesModalLabel">Detalles del Producto</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row">
+          <div class="col-md-6">
+            <p><strong>ID:</strong> {{ selectedProduct.id }}</p>
+            <p><strong>Nombre:</strong> {{ selectedProduct.name }}</p>
+            <p><strong>Categoría:</strong> {{ selectedProduct.category ? selectedProduct.category.name : 'Sin categoría' }}</p>
+            <p><strong>Descripción:</strong> {{ selectedProduct.description }}</p>
+            <p><strong>Precio:</strong> ${{ selectedProduct.price }}</p>
+            <p><strong>Descuento:</strong> {{ selectedProduct.discount }}%</p>
+            <p><strong>Valoración:</strong> {{ '⭐'.repeat(Math.round(selectedProduct.rating || 0)) }}</p>
+            <p><strong>Stock:</strong> {{ selectedProduct.stock }}</p>
+          </div>
+          <div class="col-md-6">
+            <div v-if="selectedProduct.image" class="mb-3">
+              <h6>Imagen del Producto</h6>
+              <img 
+                :src="getProductImage(selectedProduct.image)" 
+                class="img-fluid" 
+                alt="Imagen del producto" 
+                @error="handleImageError"
+                v-show="imageLoaded"
+                @load="handleImageLoad"
+              >
+              <div v-if="!imageLoaded && !imageError" class="text-center">
+                <div class="spinner-border text-brown" role="status">
+                  <span class="visually-hidden">Cargando imagen...</span>
                 </div>
-                <p v-if="imageError" class="text-danger mt-2">
-                  Error al cargar la imagen. Por favor, inténtelo de nuevo más tarde.
-                </p>
               </div>
+              <p v-if="imageError" class="text-danger mt-2">
+                Error al cargar la imagen. Por favor, inténtelo de nuevo más tarde.
+              </p>
             </div>
           </div>
-
-          <!-- Sección de Reseñas -->
-          <div class="mt-4">
-            <h5 class="text-brown">Reseñas</h5>
-            <div v-if="blogSeleccionado.reviews && blogSeleccionado.reviews.length > 0">
-              <div v-for="(review, index) in blogSeleccionado.reviews" :key="index" class="mb-3 p-3 border border-brown rounded">
-                <div class="d-flex justify-content-between">
-                  <strong>{{ review.reviewerName }}</strong>
-                  <span>{{ new Date(review.date).toLocaleDateString() }}</span>
-                </div>
-                <div>Rating: {{ '⭐'.repeat(review.rating) }}</div>
-                <p>{{ review.comment }}</p>
-              </div>
-            </div>
-            <div v-else>
-              <p>No hay reseñas para este producto.</p>
-            </div>
-
-            <!-- Formulario para agregar reseña -->
-            <form @submit.prevent="addReview" class="mt-4">
-              <h6 class="text-brown">Agregar Reseña</h6>
-              <div class="mb-3">
-                <label for="reviewerName" class="form-label">Nombre</label>
-                <input v-model="newReview.reviewerName" type="text" class="form-control bg-beige text-brown border-brown" id="reviewerName" required>
-              </div>
-              <div class="mb-3">
-                <label for="reviewerEmail" class="form-label">Email</label>
-                <input v-model="newReview.reviewerEmail" type="email" class="form-control bg-beige text-brown border-brown" id="reviewerEmail" required>
-              </div>
-              <div class="mb-3">
-                <label for="rating" class="form-label">Rating</label>
-                <select v-model="newReview.rating" class="form-select bg-beige text-brown border-brown" id="rating" required>
-                  <option value="1">1 ⭐</option>
-                  <option value="2">2 ⭐⭐</option>
-                  <option value="3">3 ⭐⭐⭐</option>
-                  <option value="4">4 ⭐⭐⭐⭐</option>
-                  <option value="5">5 ⭐⭐⭐⭐⭐</option>
-                </select>
-              </div>
-              <div class="mb-3">
-                <label for="comment" class="form-label">Comentario</label>
-                <textarea v-model="newReview.comment" class="form-control bg-beige text-brown border-brown" id="comment" rows="3" required></textarea>
-              </div>
-              <button type="submit" class="btn btn-brown">Enviar Reseña</button>
-            </form>
-          </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
       </div>
     </div>
   </div>
-</template>
-
-<script setup>
-import { ref, computed, onMounted, nextTick, watch } from 'vue';
-import { useRouter } from 'vue-router';
-import axios from 'axios';
-import $ from 'jquery';
-// Eliminadas las importaciones de CSS
-import { Modal } from 'bootstrap';
-import QRCode from 'qrcode';
-import JsBarcode from 'jsbarcode';
-
-const router = useRouter();
-const blogs = ref([]);
-const categories = ref([]);
-const searchQuery = ref('');
-const selectedCategory = ref('');
-const sortBy = ref('');
-const blogSeleccionado = ref({});
-const newReview = ref({
-  reviewerName: '',
-  reviewerEmail: '',
-  rating: 5,
-  comment: '',
-});
-const imageLoaded = ref(false);
-const imageError = ref(false);
-
-const getThumbnailUrl = (thumbnail) => {
-  if (!thumbnail) return null;
+  </div>
+  </template>
   
-  // Check if the thumbnail is already a full URL
-  if (thumbnail.startsWith('http')) {
-    return thumbnail;
-  }
+  <script>
+  import { ref, computed, onMounted, nextTick, watch } from 'vue';
+  import { useRouter } from 'vue-router';
+  import axios from 'axios';
   
-  // If it's not a full URL, construct it based on the current origin
-  return `${window.location.origin}/storage/${thumbnail}`;
-};
-
-const handleImageError = (event) => {
-  console.error('Error loading image:', event);
-  imageError.value = true;
-  imageLoaded.value = true; // Set to true to hide the loading spinner
-};
-
-const handleImageLoad = () => {
-  imageLoaded.value = true;
-  imageError.value = false;
-};
-
-const filteredBlogs = computed(() => {
-  let result = blogs.value.filter(blog => {
-    const matchesCategory = selectedCategory.value ? blog.category_id == selectedCategory.value : true;
-    const matchesSearch = blog.titulo.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-                          blog.contenido.toLowerCase().includes(searchQuery.value.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
-
-  if (sortBy.value) {
-    result.sort((a, b) => {
-      if (sortBy.value === 'id') {
-        return a.id - b.id;
-      } else if (sortBy.value ==='titulo') {
-        return a.titulo.localeCompare(b.titulo);
-      } else if (sortBy.value === 'category') {
-        return (a.category?.name || '').localeCompare(b.category?.name || '');
-      } else if (sortBy.value === 'precio') {
-        return a.precio - b.precio;
-      }
-      return 0;
-    });
-  }
-
-  return result;
-});
-
-const mostrarBlogs = async () => {
-  try {
-    const response = await axios.get('/api/blog');
-    blogs.value = response.data;
-    console.log('Blogs obtenidos:', blogs.value); // Para depuración
-    await nextTick();
-    if ($.fn.DataTable.isDataTable('#blogsTable')) {
-      $('#blogsTable').DataTable().destroy();
+  export default {
+  setup() {
+    const router = useRouter();
+    const products = ref([]);
+    const categories = ref([]);
+    const searchQuery = ref('');
+    const selectedCategory = ref('');
+    const sortBy = ref('');
+    const selectedProduct = ref({});
+    const imageLoaded = ref(false);
+    const imageError = ref(false);
+  
+    const getProductImage = (image) => {
+    if (!image) {
+      // Use a data URI instead of an external service
+      return 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22300%22%20height%3D%22200%22%20viewBox%3D%220%200%20300%20200%22%20preserveAspectRatio%3D%22none%22%3E%3Cdefs%3E%3Cstyle%20type%3D%22text%2Fcss%22%3E%23holder_1%20text%20%7B%20fill%3A%23999%3Bfont-weight%3Anormal%3Bfont-family%3AArial%2C%20Helvetica%2C%20Open%20Sans%2C%20sans-serif%2C%20monospace%3Bfont-size%3A15pt%20%7D%20%3C%2Fstyle%3E%3C%2Fdefs%3E%3Cg%20id%3D%22holder_1%22%3E%3Crect%20width%3D%22300%22%20height%3D%22200%22%20fill%3D%22%23E9ECEF%22%3E%3C%2Frect%3E%3Cg%3E%3Ctext%20x%3D%2256.1953%22%20y%3D%22107.2%22%3EProducto%3C%2Ftext%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E';
     }
-    initializeDataTable();
-  } catch (error) {
-    console.log(error);
-    blogs.value = [];
-  }
-};
-
-const fetchCategories = async () => {
-  try {
-    const response = await axios.get('/api/categories');
-    categories.value = response.data;
-  } catch (error) {
-    console.log(error);
-  }
-};
-
-const borrarBlog = async (id) => {
-  if (confirm("¿Confirma eliminar el registro?")) {
+  
+    // Check if the image is already a full URL
+    if (image.startsWith('http')) {
+      return image;
+    }
+  
+    // If it's not a full URL, construct it based on the current origin
+    return `${window.location.origin}/storage/${image}`;
+  };
+  
+  const handleImageError = (event) => {
+    // Use a data URI for the error image as well
+    event.target.src = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22300%22%20height%3D%22200%22%20viewBox%3D%220%200%20300%20200%22%20preserveAspectRatio%3D%22none%22%3E%3Cdefs%3E%3Cstyle%20type%3D%22text%2Fcss%22%3E%23holder_1%20text%20%7B%20fill%3A%23721c24%3Bfont-weight%3Abold%3Bfont-family%3AArial%2C%20Helvetica%2C%20Open%20Sans%2C%20sans-serif%2C%20monospace%3Bfont-size%3A15pt%20%7D%20%3C%2Fstyle%3E%3C%2Fdefs%3E%3Cg%20id%3D%22holder_1%22%3E%3Crect%20width%3D%22300%22%20height%3D%22200%22%20fill%3D%22%23f8d7da%22%3E%3C%2Frect%3E%3Cg%3E%3Ctext%20x%3D%2261.4687%22%20y%3D%22107.2%22%3EImagen%20no%20disponible%3C%2Ftext%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E';
+    imageLoaded.value = true; // Set to true to hide the loading spinner
+    imageError.value = true;
+  };
+  
+    const handleImageLoad = () => {
+      imageLoaded.value = true;
+      imageError.value = false;
+    };
+  
+    const filteredProducts = computed(() => {
+      let result = products.value.filter(product => {
+        const matchesCategory = selectedCategory.value ? product.category_id == selectedCategory.value : true;
+        const matchesSearch = product.name?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+                            (product.description && product.description.toLowerCase().includes(searchQuery.value.toLowerCase()));
+        return matchesCategory && matchesSearch;
+      });
+  
+      if (sortBy.value) {
+        result.sort((a, b) => {
+          if (sortBy.value === 'id') {
+            return a.id - b.id;
+          } else if (sortBy.value === 'name') {
+            return a.name?.localeCompare(b.name || '');
+          } else if (sortBy.value === 'category') {
+            return (a.category?.name || '').localeCompare(b.category?.name || '');
+          } else if (sortBy.value === 'price') {
+            return a.price - b.price;
+          }
+          return 0;
+        });
+      }
+  
+      return result;
+    });
+  
+    // Cambiar la función mostrarProductos para usar /api/products en lugar de /api/blog
+    const mostrarProductos = async () => {
+      try {
+        const response = await axios.get('/api/products');
+        products.value = response.data;
+        console.log('Productos obtenidos:', products.value); // Para depuración
+      } catch (error) {
+        console.error('Error al cargar productos:', error);
+        products.value = [];
+      }
+    };
+  
+    const fetchCategories = async () => {
+      try {
+        const response = await axios.get('/api/categories');
+        categories.value = response.data;
+      } catch (error) {
+        console.error('Error al cargar categorías:', error);
+        categories.value = [];
+      }
+    };
+  
+    // Cambiar la función borrarProducto para usar /api/products en lugar de /api/blog
+    const borrarProducto = async (id) => {
+      if (confirm("¿Confirma eliminar el registro?")) {
+        try {
+          await axios.delete(`/api/products/${id}`);
+          mostrarProductos();
+        } catch (error) {
+          console.error('Error al eliminar producto:', error);
+          alert('Error al eliminar el producto');
+        }
+      }
+    };
+  
+    const verDetalles = (index) => {
+      selectedProduct.value = JSON.parse(JSON.stringify(filteredProducts.value[index]));
+      imageLoaded.value = false;
+      imageError.value = false;
+      
+      // Usar Bootstrap 5 para mostrar el modal
+      const modalElement = document.getElementById('detallesModal');
+      if (modalElement) {
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+      } else {
+        console.error('Modal element not found');
+      }
+    };
+  
+    const filterTable = () => {
+      // No es necesario hacer nada aquí, ya que estamos usando computed properties
+      // para filtrar los productos
+    };
+  
+    onMounted(async () => {
     try {
-      await axios.delete(`/api/blog/${id}`);
-      mostrarBlogs();
+      await mostrarProductos();
+      await fetchCategories();
     } catch (error) {
-      console.log(error);
-    }
-  }
-};
-
-const verDetalles = (index) => {
-  blogSeleccionado.value = JSON.parse(JSON.stringify(filteredBlogs.value[index]));
-  if (!blogSeleccionado.value.reviews) {
-    blogSeleccionado.value.reviews = [];
-  }
-  imageLoaded.value = false;
-  imageError.value = false;
-  const modal = new Modal(document.getElementById('detallesModal'));
-  modal.show();
-};
-
-const filterTable = () => {
-  const table = $('#blogsTable').DataTable();
-  table.clear().rows.add(filteredBlogs.value).draw();
-};
-
-const initializeDataTable = () => {
-  $('#blogsTable').DataTable({
-    data: blogs.value,
-    columns: [
-      { data: 'id' },
-      { data: 'titulo' },
-      { data: 'category.name', defaultContent: 'Sin categoría' },
-      { data: 'precio', render: (data) => `$${parseFloat(data).toFixed(2)}` },
-      { data: 'stock' },
-      { data: 'brand' },
-      { 
-        data: null, 
-        render: (data, type, row, meta) => `
-          <div class="btn-group" role="group">
-            <a href="/editarBlog/${row.id}" class="btn btn-sm btn-outline-brown"><i class="fas fa-edit"></i></a>
-            <button type="button" class="btn btn-sm btn-outline-danger" onclick="borrarBlog(${row.id})"><i class="fas fa-trash"></i></button>
-            <button type="button" class="btn btn-sm btn-outline-brown" onclick="verDetalles(${meta.row})"><i class="fas fa-eye"></i></button>
-          </div>
-        `
-      }
-    ],
-    destroy: true,
-    lengthChange: true,
-    searching: false,
-    ordering: true,
-    language: {
-      "sProcessing":     "Procesando...",
-      "sLengthMenu":     "Mostrar _MENU_ registros",
-      "sZeroRecords":    "No se encontraron resultados",
-      "sEmptyTable":     "Ningún dato disponible en esta tabla",
-      "sInfo":           "Mostrando registros del _START_ al _END_ de un total de _TOTAL_ registros",
-      "sInfoEmpty":      "Mostrando registros del 0 al 0 de un total de 0 registros",
-      "sInfoFiltered":   "(filtrado de un total de _MAX_ registros)",
-      "sInfoPostFix":    "",
-      "sSearch":         "Buscar:",
-      "sUrl":            "",
-      "sInfoThousands":  ",",
-      "sLoadingRecords": "Cargando...",
-      "oPaginate": {
-        "sFirst":    "Primero",
-        "sLast":     "Último",
-        "sNext":     "Siguiente",
-        "sPrevious": "Anterior"
-      },
-      "oAria": {
-        "sSortAscending":  ": Activar para ordenar la columna de manera ascendente",
-        "sSortDescending": ": Activar para ordenar la columna de manera descendente"
-      }
+      console.error('Error during component initialization:', error);
+      // Initialize with empty arrays to prevent further errors
+      products.value = [];
+      categories.value = [];
     }
   });
-};
-
-const generateQRCode = (id) => {
-  const qrCodeElement = document.getElementById(`qrcode-modal-${id}`);
-  if (qrCodeElement) {
-    QRCode.toCanvas(qrCodeElement, `https://example.com/blog/${id}`, function (error) {
-      if (error) console.error(error);
-    });
-  }
-};
-
-const generateBarcode = (id, barcode) => {
-  const barcodeElement = document.getElementById(`barcode-modal-${id}`);
-  if (barcodeElement && barcode) {
-    JsBarcode(barcodeElement, barcode, {
-      format: "CODE128",
-      displayValue: true
-    });
-  }
-};
-
-const addReview = async () => {
-  try {
-    const review = {
-      ...newReview.value,
-      date: new Date().toISOString(),
-      rating: parseInt(newReview.value.rating)
+  
+    return {
+      products,
+      categories,
+      searchQuery,
+      selectedCategory,
+      sortBy,
+      selectedProduct,
+      imageLoaded,
+      imageError,
+      filteredProducts,
+      getProductImage,
+      handleImageError,
+      handleImageLoad,
+      mostrarProductos,
+      borrarProducto,
+      verDetalles,
+      filterTable
     };
-
-    const response = await axios.post(`/api/blog/${blogSeleccionado.value.id}/review`, review);
-
-    blogSeleccionado.value.reviews.push(review);
-    updateProductRating();
-
-    // Actualizar el blog en la lista principal
-    const index = blogs.value.findIndex(b => b.id === blogSeleccionado.value.id);
-    if (index !== -1) {
-      blogs.value[index] = { ...blogSeleccionado.value };
-    }
-
-    // Limpiar el formulario
-    newReview.value = {
-      reviewerName: '',
-      reviewerEmail: '',
-      rating: 5,
-      comment: '',
-    };
-
-    alert('Reseña agregada con éxito');
-  } catch (error) {
-    console.error('Error al agregar la reseña:', error);
-    alert('Error al agregar la reseña');
   }
-};
-
-const updateProductRating = () => {
-  const reviews = blogSeleccionado.value.reviews;
-  if (reviews && reviews.length > 0) {
-    const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0);
-    blogSeleccionado.value.valoracion = totalRating / reviews.length;
-  }
-};
-
-watch(blogSeleccionado, (newBlog) => {
-  if (newBlog.id) {
-    nextTick(() => {
-      generateQRCode(newBlog.id);
-      generateBarcode(newBlog.id, newBlog.barcode);
-    });
-  }
-});
-
-watch(() => blogs.value, (newBlogs) => {
-  if ($.fn.DataTable.isDataTable('#blogsTable')) {
-    $('#blogsTable').DataTable().destroy();
-  }
-  nextTick(() => {
-    initializeDataTable();
-  });
-}, { deep: true });
-
-onMounted(() => {
-  mostrarBlogs();
-  fetchCategories();
-});
-
-// Hacer funciones accesibles globalmente
-window.borrarBlog = borrarBlog;
-window.verDetalles = verDetalles;
-</script>
-
-<style scoped>
-#blogsTable {
+  };
+  </script>
+  
+  <style scoped>
+  #productsTable {
   width: 100%;
-}
-.table-responsive {
+  }
+  .table-responsive {
   overflow-x: auto;
-}
-.btn-group {
+  }
+  .btn-group {
   white-space: nowrap;
-}
-.bg-brown {
+  }
+  .bg-brown {
   background-color: #8D6E63;
-}
-.text-brown {
+  }
+  .text-brown {
   color: #5D4037;
-}
-.border-brown {
+  }
+  .border-brown {
   border-color: #8D6E63;
-}
-.btn-brown {
+  }
+  .btn-brown {
   background-color: #8D6E63;
   border-color: #8D6E63;
   color: #F5E6D3;
-}
-.btn-brown:hover {
+  }
+  .btn-brown:hover {
   background-color: #795548;
   border-color: #795548;
   color: #F5E6D3;
-}
-.btn-outline-brown {
+  }
+  .btn-outline-brown {
   color: #8D6E63;
   border-color: #8D6E63;
-}
-.btn-outline-brown:hover {
+  }
+  .btn-outline-brown:hover {
   background-color: #8D6E63;
   color: #F5E6D3;
-}
-.bg-beige {
+  }
+  .bg-beige {
   background-color: #F5E6D3;
-}
-.bg-light-beige {
+  }
+  .bg-light-beige {
   background-color: #D7CCC8;
-}
-.text-beige {
+  }
+  .text-beige {
   color: #F5E6D3;
-}
-:focus-visible {
+  }
+  :focus-visible {
   outline: 2px solid #8D6E63 !important;
   outline-offset: 2px;
-}
-</style>
-
+  }
+  </style>
+  
+  

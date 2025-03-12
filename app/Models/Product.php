@@ -14,24 +14,21 @@ class Product extends Model
         'description',
         'price',
         'stock',
+        'image',
         'category_id',
-        'image'
+        'discount',
+        'rating'
+    ];
+
+    protected $casts = [
+        'price' => 'decimal:2',
+        'discount' => 'decimal:2',
+        'rating' => 'decimal:2',
     ];
 
     public function category()
     {
         return $this->belongsTo(Category::class);
     }
-
-    public function orderItems()
-    {
-        return $this->hasMany(OrderItem::class);
-    }
-
-    public function decreaseStock($quantity)
-    {
-        $this->stock -= $quantity;
-        $this->save();
-        return $this;
-    }
 }
+

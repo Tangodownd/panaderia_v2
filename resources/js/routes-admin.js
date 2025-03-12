@@ -8,8 +8,6 @@ import Mostrar from "./components/blog/Mostrar.vue"
 import Crear from "./components/blog/Crear.vue"
 import Editar from "./components/blog/Editar.vue"
 import AdminUsers from "./components/admin/AdminUsers.vue"
-
-// Importamos un componente para categorías (crearemos este archivo después)
 import AdminCategories from "./components/admin/AdminCategories.vue"
 
 const routes = [
@@ -48,15 +46,14 @@ const routes = [
         props: true,
       },
       {
-        path: "administradores",
-        name: "adminUsers",
-        component: AdminUsers,
-      },
-      // Agregamos la ruta faltante para categorías
-      {
         path: "categorias",
         name: "adminCategories",
         component: AdminCategories,
+      },
+      {
+        path: "administradores",
+        name: "adminUsers",
+        component: AdminUsers,
       },
     ],
   },

@@ -112,18 +112,18 @@
                 <li v-for="product in recentProducts" :key="product.id" class="list-group-item d-flex justify-content-between align-items-center">
                   <div class="d-flex align-items-center">
                     <img 
-                      :src="getProductImage(product.thumbnail)" 
+                      :src="getProductImage(product?.thumbnail)" 
                       class="rounded me-3" 
                       alt="Producto" 
                       style="width: 40px; height: 40px; object-fit: cover;"
                       @error="handleImageError"
                     >
                     <div>
-                      <h6 class="mb-0 text-brown">{{ product.titulo }}</h6>
-                      <small class="text-muted">{{ formatPrice(product.precio) }}</small>
+                      <h6 class="mb-0 text-brown">{{ product?.titulo || 'Sin título' }}</h6>
+                      <small class="text-muted">{{ formatPrice(product?.precio || 0) }}</small>
                     </div>
                   </div>
-                  <router-link :to="{ name: 'editarBlog', params: { id: product.id } }" class="btn btn-sm btn-outline-brown">
+                  <router-link :to="{ name: 'editarBlog', params: { id: product?.id } }" class="btn btn-sm btn-outline-brown">
                     <i class="fas fa-edit"></i>
                   </router-link>
                 </li>
@@ -145,16 +145,18 @@
                 </div>
               </div>
               <div v-else-if="recentOrders.length === 0" class="text-center py-3">
+                <i class="fas fa-shopping-cart fa-3x text-muted mb-3"></i>
                 <p class="text-muted mb-0">No hay pedidos recientes</p>
+                <p class="text-muted small">Los pedidos aparecerán aquí cuando los clientes realicen compras</p>
               </div>
               <ul v-else class="list-group list-group-flush">
                 <li v-for="order in recentOrders" :key="order.id" class="list-group-item d-flex justify-content-between align-items-center">
                   <div>
-                    <h6 class="mb-0 text-brown">{{ order.orderNumber }}</h6>
-                    <small class="text-muted">{{ formatDate(order.date) }} - {{ order.customer.name }}</small>
+                    <h6 class="mb-0 text-brown">{{ order?.orderNumber || 'Sin número' }}</h6>
+                    <small class="text-muted">{{ formatDate(order?.date) }} - {{ order?.customer?.name || 'Cliente desconocido' }}</small>
                   </div>
                   <div>
-                    <span :class="getOrderStatusBadgeClass(order.status)">{{ getOrderStatusText(order.status) }}</span>
+                    <span :class="getOrderStatusBadgeClass(order?.status)">{{ getOrderStatusText(order?.status) }}</span>
                   </div>
                 </li>
               </ul>
@@ -209,8 +211,22 @@
       const fetchRecentProducts = async () => {
         loading.products = true;
         try {
-          const response = await axios.get('/api/blog?limit=5');
-          recentProducts.value = response.data.slice(0, 5);
+          const response = await axios.get('/api/products?limit=5');
+          
+          // Make sure we have valid data and properly map the fields
+          if (response.data && Array.isArray(response.data)) {
+            recentProducts.value = response.data
+              .filter(product => product && product.id)
+              .slice(0, 5)
+              .map(product => ({
+                id: product.id,
+                titulo: product.name || 'Sin título',
+                precio: product.price || 0,
+                thumbnail: product.image || null
+              }));
+          } else {
+            recentProducts.value = [];
+          }
         } catch (error) {
           console.error('Error fetching recent products:', error);
           recentProducts.value = [];
@@ -225,56 +241,85 @@
           // En un entorno real, esto sería una llamada a la API
           // Por ahora, simulamos datos
           const response = await axios.get('/api/admin/orders/recent');
-          recentOrders.value = response.data;
+          
+          // Check if the response data is valid and contains actual orders
+          if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+            // Filter out any invalid orders and limit to 5
+            recentOrders.value = response.data
+              .filter(order => order && order.id && order.orderNumber)
+              .slice(0, 5);
+          } else {
+            // If no valid orders, set to empty array
+            recentOrders.value = [];
+          }
         } catch (error) {
           console.error('Error fetching recent orders:', error);
-          // Datos de ejemplo para demostración
-          recentOrders.value = [
-            {
-              id: 1,
-              orderNumber: 'ORD-1234',
-              date: new Date().toISOString(),
-              customer: { name: 'Juan Pérez' },
-              status: 'pending'
-            },
-            {
-              id: 2,
-              orderNumber: 'ORD-1235',
-              date: new Date(Date.now() - 86400000).toISOString(), // Ayer
-              customer: { name: 'María López' },
-              status: 'completed'
-            }
-          ];
+          // Datos de ejemplo para demostración - solo si estamos en desarrollo
+          if (process.env.NODE_ENV === 'development') {
+            recentOrders.value = [
+              {
+                id: 1,
+                orderNumber: 'ORD-1234',
+                date: new Date().toISOString(),
+                customer: { name: 'Juan Pérez' },
+                status: 'pending'
+              },
+              {
+                id: 2,
+                orderNumber: 'ORD-1235',
+                date: new Date(Date.now() - 86400000).toISOString(), // Ayer
+                customer: { name: 'María López' },
+                status: 'completed'
+              }
+            ];
+          } else {
+            recentOrders.value = [];
+          }
         } finally {
           loading.orders = false;
         }
       };
   
       const getProductImage = (thumbnail) => {
-        if (!thumbnail) return 'https://via.placeholder.com/40x40?text=No+Image';
-        
-        if (thumbnail.startsWith('http')) {
-          return thumbnail;
-        }
-        
-        return `${window.location.origin}/storage/${thumbnail}`;
-      };
+    if (!thumbnail) {
+      console.log("No hay imagen disponible");
+      return 'data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%2240%22%20height%3D%2240%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2040%2040%22%20preserveAspectRatio%3D%22none%22%3E%3Cdefs%3E%3Cstyle%20type%3D%22text%2Fcss%22%3E%23holder_1%20text%20%7B%20fill%3A%23999%3Bfont-weight%3Anormal%3Bfont-family%3AArial%2C%20Helvetica%2C%20Open%20Sans%2C%20sans-serif%2C%20monospace%3Bfont-size%3A10pt%20%7D%20%3C%2Fstyle%3E%3C%2Fdefs%3E%3Cg%20id%3D%22holder_1%22%3E%3Crect%20width%3D%2240%22%20height%3D%2240%22%20fill%3D%22%23E9ECEF%22%3E%3C%2Frect%3E%3Cg%3E%3Ctext%20x%3D%2213%22%20y%3D%2220%22%3EN%2FA%3C%2Ftext%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E';
+    }
   
-      const handleImageError = (event) => {
-        event.target.src = 'https://via.placeholder.com/40x40?text=Error';
-      };
+    console.log("Ruta de imagen original:", thumbnail);
+  
+    // Check if the image is already a full URL
+    if (thumbnail.startsWith('http')) {
+      console.log("URL completa:", thumbnail);
+      return thumbnail;
+    }
+  
+    // If it's not a full URL, construct it based on the current origin
+    const fullUrl = `${window.location.origin}/storage/${thumbnail}`;
+    console.log("URL construida:", fullUrl);
+    return fullUrl;
+  };
+  
+  const handleImageError = (event) => {
+    console.error("Error al cargar imagen:", event.target.src);
+    // Use a data URI for the error image as well
+    event.target.src = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%2240%22%20height%3D%2240%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2040%2040%22%20preserveAspectRatio%3D%22none%22%3E%3Cdefs%3E%3Cstyle%20type%3D%22text%2Fcss%22%3E%23holder_1%20text%20%7B%20fill%3A%23721c24%3Bfont-weight%3Abold%3Bfont-family%3AArial%2C%20Helvetica%2C%20Open%20Sans%2C%20sans-serif%2C%20monospace%3Bfont-size%3A10pt%20%7D%20%3C%2Fstyle%3E%3C%2Fdefs%3E%3Cg%20id%3D%22holder_1%22%3E%3Crect%20width%3D%2240%22%20height%3D%2240%22%20fill%3D%22%23f8d7da%22%3E%3C%2Frect%3E%3Cg%3E%3Ctext%20x%3D%2213%22%20y%3D%2220%22%3EErr%3C%2Ftext%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E';
+  };
   
       const formatPrice = (price) => {
         return `$${parseFloat(price).toFixed(2)}`;
       };
   
       const formatDate = (dateString) => {
+        if (!dateString) return 'Fecha desconocida';
         const date = new Date(dateString);
         return date.toLocaleDateString();
       };
   
       const getOrderStatusBadgeClass = (status) => {
         const classes = 'badge ';
+        if (!status) return classes + 'bg-secondary';
+        
         switch (status) {
           case 'pending':
             return classes + 'bg-warning text-dark';
@@ -290,6 +335,8 @@
       };
   
       const getOrderStatusText = (status) => {
+        if (!status) return 'Desconocido';
+        
         switch (status) {
           case 'pending':
             return 'Pendiente';
@@ -305,9 +352,20 @@
       };
   
       onMounted(() => {
-        fetchStats();
-        fetchRecentProducts();
-        fetchRecentOrders();
+        try {
+          fetchStats();
+          fetchRecentProducts();
+          fetchRecentOrders();
+        } catch (error) {
+          console.error('Error initializing dashboard:', error);
+          // Initialize with default values to prevent errors
+          stats.totalProducts = 0;
+          stats.totalCategories = 0;
+          stats.pendingOrders = 0;
+          stats.outOfStockProducts = 0;
+          recentProducts.value = [];
+          recentOrders.value = [];
+        }
       });
   
       return {

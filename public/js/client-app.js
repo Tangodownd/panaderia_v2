@@ -22628,14 +22628,20 @@ function _toPrimitive(t, r) { if ("object" != typeof t || !t) return t; var e = 
     const fetchProducts = async () => {
       try {
         loading.value = true;
-        const response = await axios__WEBPACK_IMPORTED_MODULE_1___default().get('/api/blog');
+        const response = await axios__WEBPACK_IMPORTED_MODULE_1___default().get('/api/products');
         products.value = response.data;
 
         // Asegurarse de que todos los productos tengan valores por defecto
         products.value = products.value.map(product => _objectSpread(_objectSpread({}, product), {}, {
           availabilityStatus: product.availabilityStatus || 'In Stock',
-          valoracion: product.valoracion || 0,
-          descuento: product.descuento || 0
+          valoracion: product.rating || 0,
+          descuento: product.discount || 0,
+          precio: product.price,
+          titulo: product.name,
+          contenido: product.description,
+          thumbnail: product.image,
+          // Usar image como thumbnail
+          image: product.image // Asegurarse de que image esté disponible
         }));
       } catch (error) {
         console.error('Error al cargar productos:', error);
@@ -22692,16 +22698,25 @@ function _toPrimitive(t, r) { if ("object" != typeof t || !t) return t; var e = 
       return product.precio * (1 - discount / 100);
     };
     const getProductImage = product => {
-      if (!product || !product.thumbnail) {
-        return 'https://via.placeholder.com/300x200?text=Producto';
+      if (!product || !product.thumbnail && !product.image) {
+        // Use a data URI instead of an external service
+        return 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22300%22%20height%3D%22200%22%20viewBox%3D%220%200%20300%20200%22%20preserveAspectRatio%3D%22none%22%3E%3Cdefs%3E%3Cstyle%20type%3D%22text%2Fcss%22%3E%23holder_1%20text%20%7B%20fill%3A%23999%3Bfont-weight%3Anormal%3Bfont-family%3AArial%2C%20Helvetica%2C%20Open%20Sans%2C%20sans-serif%2C%20monospace%3Bfont-size%3A15pt%20%7D%20%3C%2Fstyle%3E%3C%2Fdefs%3E%3Cg%20id%3D%22holder_1%22%3E%3Crect%20width%3D%22300%22%20height%3D%22200%22%20fill%3D%22%23E9ECEF%22%3E%3C%2Frect%3E%3Cg%3E%3Ctext%20x%3D%2256.1953%22%20y%3D%22107.2%22%3EProducto%3C%2Ftext%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E';
       }
-      if (product.thumbnail.startsWith('http')) {
-        return product.thumbnail;
+
+      // Check for image property first, then thumbnail
+      const imagePath = product.image || product.thumbnail;
+
+      // Check if the image is already a full URL
+      if (imagePath.startsWith('http')) {
+        return imagePath;
       }
-      return `${window.location.origin}/storage/${product.thumbnail}`;
+
+      // If it's not a full URL, construct it based on the current origin
+      return `${window.location.origin}/storage/${imagePath}`;
     };
     const handleImageError = event => {
-      event.target.src = 'https://via.placeholder.com/300x200?text=Imagen+no+disponible';
+      // Use a data URI for the error image as well
+      event.target.src = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22300%22%20height%3D%22200%22%20viewBox%3D%220%200%20300%20200%22%20preserveAspectRatio%3D%22none%22%3E%3Cdefs%3E%3Cstyle%20type%3D%22text%2Fcss%22%3E%23holder_1%20text%20%7B%20fill%3A%23721c24%3Bfont-weight%3Abold%3Bfont-family%3AArial%2C%20Helvetica%2C%20Open%20Sans%2C%20sans-serif%2C%20monospace%3Bfont-size%3A15pt%20%7D%20%3C%2Fstyle%3E%3C%2Fdefs%3E%3Cg%20id%3D%22holder_1%22%3E%3Crect%20width%3D%22300%22%20height%3D%22200%22%20fill%3D%22%23f8d7da%22%3E%3C%2Frect%3E%3Cg%3E%3Ctext%20x%3D%2261.4687%22%20y%3D%22107.2%22%3EImagen%20no%20disponible%3C%2Ftext%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E';
     };
     const getAvailabilityClass = (status, additionalClass = '') => {
       let className = additionalClass + ' badge ';
@@ -22875,13 +22890,13 @@ function _toPrimitive(t, r) { if ("object" != typeof t || !t) return t; var e = 
       notification.setAttribute('aria-live', 'assertive');
       notification.setAttribute('aria-atomic', 'true');
       notification.innerHTML = `
-          <div class="d-flex">
-            <div class="toast-body">
-              ${message}
-            </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        <div class="d-flex">
+          <div class="toast-body">
+            ${message}
           </div>
-        `;
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+      `;
       document.body.appendChild(notification);
 
       // Mostrar la notificación
@@ -23058,14 +23073,20 @@ function _toPrimitive(t, r) { if ("object" != typeof t || !t) return t; var e = 
     const fetchProducts = async () => {
       try {
         loading.value = true;
-        const response = await axios__WEBPACK_IMPORTED_MODULE_1___default().get('/api/blog');
+        const response = await axios__WEBPACK_IMPORTED_MODULE_1___default().get('/api/products');
         products.value = response.data;
 
         // Asegurarse de que todos los productos tengan valores por defecto
         products.value = products.value.map(product => _objectSpread(_objectSpread({}, product), {}, {
           availabilityStatus: product.availabilityStatus || 'In Stock',
-          valoracion: product.valoracion || 0,
-          descuento: product.descuento || 0
+          valoracion: product.rating || 0,
+          descuento: product.discount || 0,
+          precio: product.price,
+          titulo: product.name,
+          contenido: product.description,
+          thumbnail: product.image,
+          // Usar image como thumbnail
+          image: product.image // Asegurarse de que image esté disponible
         }));
       } catch (error) {
         console.error('Error al cargar productos:', error);
@@ -23122,16 +23143,25 @@ function _toPrimitive(t, r) { if ("object" != typeof t || !t) return t; var e = 
       return product.precio * (1 - discount / 100);
     };
     const getProductImage = product => {
-      if (!product || !product.thumbnail) {
-        return 'https://via.placeholder.com/300x200?text=Producto';
+      if (!product || !product.thumbnail && !product.image) {
+        // Use a data URI instead of an external service
+        return 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22300%22%20height%3D%22200%22%20viewBox%3D%220%200%20300%20200%22%20preserveAspectRatio%3D%22none%22%3E%3Cdefs%3E%3Cstyle%20type%3D%22text%2Fcss%22%3E%23holder_1%20text%20%7B%20fill%3A%23999%3Bfont-weight%3Anormal%3Bfont-family%3AArial%2C%20Helvetica%2C%20Open%20Sans%2C%20sans-serif%2C%20monospace%3Bfont-size%3A15pt%20%7D%20%3C%2Fstyle%3E%3C%2Fdefs%3E%3Cg%20id%3D%22holder_1%22%3E%3Crect%20width%3D%22300%22%20height%3D%22200%22%20fill%3D%22%23E9ECEF%22%3E%3C%2Frect%3E%3Cg%3E%3Ctext%20x%3D%2256.1953%22%20y%3D%22107.2%22%3EProducto%3C%2Ftext%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E';
       }
-      if (product.thumbnail.startsWith('http')) {
-        return product.thumbnail;
+
+      // Check for image property first, then thumbnail
+      const imagePath = product.image || product.thumbnail;
+
+      // Check if the image is already a full URL
+      if (imagePath.startsWith('http')) {
+        return imagePath;
       }
-      return `${window.location.origin}/storage/${product.thumbnail}`;
+
+      // If it's not a full URL, construct it based on the current origin
+      return `${window.location.origin}/storage/${imagePath}`;
     };
     const handleImageError = event => {
-      event.target.src = 'https://via.placeholder.com/300x200?text=Imagen+no+disponible';
+      // Use a data URI for the error image as well
+      event.target.src = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22300%22%20height%3D%22200%22%20viewBox%3D%220%200%20300%20200%22%20preserveAspectRatio%3D%22none%22%3E%3Cdefs%3E%3Cstyle%20type%3D%22text%2Fcss%22%3E%23holder_1%20text%20%7B%20fill%3A%23721c24%3Bfont-weight%3Abold%3Bfont-family%3AArial%2C%20Helvetica%2C%20Open%20Sans%2C%20sans-serif%2C%20monospace%3Bfont-size%3A15pt%20%7D%20%3C%2Fstyle%3E%3C%2Fdefs%3E%3Cg%20id%3D%22holder_1%22%3E%3Crect%20width%3D%22300%22%20height%3D%22200%22%20fill%3D%22%23f8d7da%22%3E%3C%2Frect%3E%3Cg%3E%3Ctext%20x%3D%2261.4687%22%20y%3D%22107.2%22%3EImagen%20no%20disponible%3C%2Ftext%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E';
     };
     const getAvailabilityClass = (status, additionalClass = '') => {
       let className = additionalClass + ' badge ';
@@ -23216,13 +23246,13 @@ function _toPrimitive(t, r) { if ("object" != typeof t || !t) return t; var e = 
       notification.setAttribute('aria-live', 'assertive');
       notification.setAttribute('aria-atomic', 'true');
       notification.innerHTML = `
-          <div class="d-flex">
-            <div class="toast-body">
-              ${message}
-            </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        <div class="d-flex">
+          <div class="toast-body">
+            ${message}
           </div>
-        `;
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+      `;
       document.body.appendChild(notification);
 
       // Mostrar la notificación
@@ -23317,16 +23347,25 @@ __webpack_require__.r(__webpack_exports__);
       return cart.value.items.reduce((total, item) => total + parseInt(item.quantity), 0);
     });
     const getProductImage = product => {
-      if (!product || !product.thumbnail) {
-        return 'https://via.placeholder.com/300x200?text=Producto';
+      if (!product || !product.thumbnail && !product.image) {
+        // Use a data URI instead of an external service
+        return 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20preserveAspectRatio%3D%22none%22%3E%3Cdefs%3E%3Cstyle%20type%3D%22text%2Fcss%22%3E%23holder_1%20text%20%7B%20fill%3A%23999%3Bfont-weight%3Anormal%3Bfont-family%3AArial%2C%20Helvetica%2C%20Open%20Sans%2C%20sans-serif%2C%20monospace%3Bfont-size%3A10pt%20%7D%20%3C%2Fstyle%3E%3C%2Fdefs%3E%3Cg%20id%3D%22holder_1%22%3E%3Crect%20width%3D%2260%22%20height%3D%2260%22%20fill%3D%22%23E9ECEF%22%3E%3C%2Frect%3E%3Cg%3E%3Ctext%20x%3D%2213%22%20y%3D%2236%22%3EProd%3C%2Ftext%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E';
       }
-      if (product.thumbnail.startsWith('http')) {
-        return product.thumbnail;
+
+      // Check for image property first, then thumbnail
+      const imagePath = product.image || product.thumbnail;
+
+      // Check if the image is already a full URL
+      if (imagePath.startsWith('http')) {
+        return imagePath;
       }
-      return `${window.location.origin}/storage/${product.thumbnail}`;
+
+      // If it's not a full URL, construct it based on the current origin
+      return `${window.location.origin}/storage/${imagePath}`;
     };
     const handleImageError = event => {
-      event.target.src = 'https://via.placeholder.com/300x200?text=Imagen+no+disponible';
+      // Use a data URI for the error image as well
+      event.target.src = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20preserveAspectRatio%3D%22none%22%3E%3Cdefs%3E%3Cstyle%20type%3D%22text%2Fcss%22%3E%23holder_1%20text%20%7B%20fill%3A%23721c24%3Bfont-weight%3Abold%3Bfont-family%3AArial%2C%20Helvetica%2C%20Open%20Sans%2C%20sans-serif%2C%20monospace%3Bfont-size%3A10pt%20%7D%20%3C%2Fstyle%3E%3C%2Fdefs%3E%3Cg%20id%3D%22holder_1%22%3E%3Crect%20width%3D%2260%22%20height%3D%2260%22%20fill%3D%22%23f8d7da%22%3E%3C%2Frect%3E%3Cg%3E%3Ctext%20x%3D%2210%22%20y%3D%2236%22%3EError%3C%2Ftext%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E';
     };
     const formatPrice = price => {
       return `$${parseFloat(price).toFixed(2)}`;
@@ -25131,7 +25170,7 @@ __webpack_require__.r(__webpack_exports__);
 
 var ___CSS_LOADER_EXPORT___ = _node_modules_laravel_mix_node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_0___default()(function(i){return i[1]});
 // Module
-___CSS_LOADER_EXPORT___.push([module.id, "\n.bg-beige[data-v-20b72577] {\r\n    background-color: #F5E6D3;\n}\n.bg-cream[data-v-20b72577] {\r\n    background-color: #FFF8E7;\n}\n.bg-light-brown[data-v-20b72577] {\r\n    background-color: #A67C52;\n}\n.text-brown[data-v-20b72577] {\r\n    color: #8B4513;\n}\n.border-brown[data-v-20b72577] {\r\n    border-color: #8B4513;\n}\n.btn-brown[data-v-20b72577] {\r\n    background-color: #8B4513;\r\n    border-color: #8B4513;\r\n    color: #FFF8E7;\n}\n.btn-brown[data-v-20b72577]:hover {\r\n    background-color: #6B3E0A;\r\n    border-color: #6B3E0A;\r\n    color: #FFF8E7;\n}\n.btn-outline-brown[data-v-20b72577] {\r\n    color: #8B4513;\r\n    border-color: #8B4513;\r\n    background-color: transparent;\n}\n.btn-outline-brown[data-v-20b72577]:hover {\r\n    background-color: #8B4513;\r\n    color: #FFF8E7;\n}\n.bg-brown[data-v-20b72577] {\r\n    background-color: #8B4513;\n}\n.hero-section[data-v-20b72577] {\r\n    background-color: #8B4513;\r\n    background-image: linear-gradient(135deg, #8B4513 0%, #A67C52 100%);\n}\n.product-card[data-v-20b72577] {\r\n    transition: transform 0.3s ease, box-shadow 0.3s ease;\n}\n.product-card[data-v-20b72577]:hover {\r\n    transform: translateY(-5px);\r\n    box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;\n}\n.hover-card[data-v-20b72577] {\r\n    transition: transform 0.3s ease, box-shadow 0.3s ease;\n}\n.hover-card[data-v-20b72577]:hover {\r\n    transform: translateY(-5px);\r\n    box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;\n}\r\n  ", ""]);
+___CSS_LOADER_EXPORT___.push([module.id, "\n.bg-beige[data-v-20b72577] {\r\n  background-color: #F5E6D3;\n}\n.bg-cream[data-v-20b72577] {\r\n  background-color: #FFF8E7;\n}\n.bg-light-brown[data-v-20b72577] {\r\n  background-color: #A67C52;\n}\n.text-brown[data-v-20b72577] {\r\n  color: #8B4513;\n}\n.border-brown[data-v-20b72577] {\r\n  border-color: #8B4513;\n}\n.btn-brown[data-v-20b72577] {\r\n  background-color: #8B4513;\r\n  border-color: #8B4513;\r\n  color: #FFF8E7;\n}\n.btn-brown[data-v-20b72577]:hover {\r\n  background-color: #6B3E0A;\r\n  border-color: #6B3E0A;\r\n  color: #FFF8E7;\n}\n.btn-outline-brown[data-v-20b72577] {\r\n  color: #8B4513;\r\n  border-color: #8B4513;\r\n  background-color: transparent;\n}\n.btn-outline-brown[data-v-20b72577]:hover {\r\n  background-color: #8B4513;\r\n  color: #FFF8E7;\n}\n.bg-brown[data-v-20b72577] {\r\n  background-color: #8B4513;\n}\n.hero-section[data-v-20b72577] {\r\n  background-color: #8B4513;\r\n  background-image: linear-gradient(135deg, #8B4513 0%, #A67C52 100%);\n}\n.product-card[data-v-20b72577] {\r\n  transition: transform 0.3s ease, box-shadow 0.3s ease;\n}\n.product-card[data-v-20b72577]:hover {\r\n  transform: translateY(-5px);\r\n  box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;\n}\n.hover-card[data-v-20b72577] {\r\n  transition: transform 0.3s ease, box-shadow 0.3s ease;\n}\n.hover-card[data-v-20b72577]:hover {\r\n  transform: translateY(-5px);\r\n  box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;\n}\r\n", ""]);
 // Exports
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (___CSS_LOADER_EXPORT___);
 
@@ -25155,7 +25194,7 @@ __webpack_require__.r(__webpack_exports__);
 
 var ___CSS_LOADER_EXPORT___ = _node_modules_laravel_mix_node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_0___default()(function(i){return i[1]});
 // Module
-___CSS_LOADER_EXPORT___.push([module.id, "\n.bg-beige[data-v-dad6ba5a] {\r\n    background-color: #F5E6D3;\n}\n.bg-cream[data-v-dad6ba5a] {\r\n    background-color: #FFF8E7;\n}\n.bg-light-brown[data-v-dad6ba5a] {\r\n    background-color: #A67C52;\n}\n.text-brown[data-v-dad6ba5a] {\r\n    color: #8B4513;\n}\n.border-brown[data-v-dad6ba5a] {\r\n    border-color: #8B4513;\n}\n.btn-brown[data-v-dad6ba5a] {\r\n    background-color: #8B4513;\r\n    border-color: #8B4513;\r\n    color: #FFF8E7;\n}\n.btn-brown[data-v-dad6ba5a]:hover {\r\n    background-color: #6B3E0A;\r\n    border-color: #6B3E0A;\r\n    color: #FFF8E7;\n}\n.btn-outline-brown[data-v-dad6ba5a] {\r\n    color: #8B4513;\r\n    border-color: #8B4513;\r\n    background-color: transparent;\n}\n.btn-outline-brown[data-v-dad6ba5a]:hover {\r\n    background-color: #8B4513;\r\n    color: #FFF8E7;\n}\n.bg-brown[data-v-dad6ba5a] {\r\n    background-color: #8B4513;\n}\n.product-card[data-v-dad6ba5a] {\r\n    transition: transform 0.3s ease, box-shadow 0.3s ease;\n}\n.product-card[data-v-dad6ba5a]:hover {\r\n    transform: translateY(-5px);\r\n    box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;\n}\r\n  ", ""]);
+___CSS_LOADER_EXPORT___.push([module.id, "\n.bg-beige[data-v-dad6ba5a] {\r\n  background-color: #F5E6D3;\n}\n.bg-cream[data-v-dad6ba5a] {\r\n  background-color: #FFF8E7;\n}\n.bg-light-brown[data-v-dad6ba5a] {\r\n  background-color: #A67C52;\n}\n.text-brown[data-v-dad6ba5a] {\r\n  color: #8B4513;\n}\n.border-brown[data-v-dad6ba5a] {\r\n  border-color: #8B4513;\n}\n.btn-brown[data-v-dad6ba5a] {\r\n  background-color: #8B4513;\r\n  border-color: #8B4513;\r\n  color: #FFF8E7;\n}\n.btn-brown[data-v-dad6ba5a]:hover {\r\n  background-color: #6B3E0A;\r\n  border-color: #6B3E0A;\r\n  color: #FFF8E7;\n}\n.btn-outline-brown[data-v-dad6ba5a] {\r\n  color: #8B4513;\r\n  border-color: #8B4513;\r\n  background-color: transparent;\n}\n.btn-outline-brown[data-v-dad6ba5a]:hover {\r\n  background-color: #8B4513;\r\n  color: #FFF8E7;\n}\n.bg-brown[data-v-dad6ba5a] {\r\n  background-color: #8B4513;\n}\n.product-card[data-v-dad6ba5a] {\r\n  transition: transform 0.3s ease, box-shadow 0.3s ease;\n}\n.product-card[data-v-dad6ba5a]:hover {\r\n  transform: translateY(-5px);\r\n  box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;\n}\r\n", ""]);
 // Exports
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (___CSS_LOADER_EXPORT___);
 
@@ -25179,7 +25218,7 @@ __webpack_require__.r(__webpack_exports__);
 
 var ___CSS_LOADER_EXPORT___ = _node_modules_laravel_mix_node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_0___default()(function(i){return i[1]});
 // Module
-___CSS_LOADER_EXPORT___.push([module.id, "\n.bg-beige[data-v-81828fac] {\r\n    background-color: #F5E6D3;\n}\n.bg-cream[data-v-81828fac] {\r\n    background-color: #FFF8E7;\n}\n.text-brown[data-v-81828fac] {\r\n    color: #8B4513;\n}\n.border-brown[data-v-81828fac] {\r\n    border-color: #8B4513;\n}\n.btn-brown[data-v-81828fac] {\r\n    background-color: #8B4513;\r\n    border-color: #8B4513;\r\n    color: #FFF8E7;\n}\n.btn-brown[data-v-81828fac]:hover {\r\n    background-color: #6B3E0A;\r\n    border-color: #6B3E0A;\r\n    color: #FFF8E7;\n}\n.btn-outline-brown[data-v-81828fac] {\r\n    color: #8B4513;\r\n    border-color: #8B4513;\r\n    background-color: transparent;\n}\n.btn-outline-brown[data-v-81828fac]:hover {\r\n    background-color: #8B4513;\r\n    color: #FFF8E7;\n}\n.bg-brown[data-v-81828fac] {\r\n    background-color: #8B4513;\n}\r\n  ", ""]);
+___CSS_LOADER_EXPORT___.push([module.id, "\n.bg-beige[data-v-81828fac] {\r\n  background-color: #F5E6D3;\n}\n.bg-cream[data-v-81828fac] {\r\n  background-color: #FFF8E7;\n}\n.text-brown[data-v-81828fac] {\r\n  color: #8B4513;\n}\n.border-brown[data-v-81828fac] {\r\n  border-color: #8B4513;\n}\n.btn-brown[data-v-81828fac] {\r\n  background-color: #8B4513;\r\n  border-color: #8B4513;\r\n  color: #FFF8E7;\n}\n.btn-brown[data-v-81828fac]:hover {\r\n  background-color: #6B3E0A;\r\n  border-color: #6B3E0A;\r\n  color: #FFF8E7;\n}\n.btn-outline-brown[data-v-81828fac] {\r\n  color: #8B4513;\r\n  border-color: #8B4513;\r\n  background-color: transparent;\n}\n.btn-outline-brown[data-v-81828fac]:hover {\r\n  background-color: #8B4513;\r\n  color: #FFF8E7;\n}\n.bg-brown[data-v-81828fac] {\r\n  background-color: #8B4513;\n}\r\n", ""]);
 // Exports
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (___CSS_LOADER_EXPORT___);
 
