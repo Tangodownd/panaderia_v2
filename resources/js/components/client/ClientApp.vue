@@ -3,7 +3,7 @@
       <nav class="navbar navbar-expand-lg navbar-light bg-cream border-bottom border-brown sticky-top shadow-sm">
         <div class="container">
           <a class="navbar-brand text-brown" href="#">
-            <i class="fas fa-bread-slice me-2"></i>Panadería El Buen Gusto
+            <i class="fas fa-bread-slice me-2"></i>Panadería Orquidea de Oro
           </a>
           <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
@@ -47,16 +47,15 @@
         <div class="container">
           <div class="row">
             <div class="col-md-4 mb-3 mb-md-0">
-              <h5 class="mb-3">Panadería El Buen Gusto</h5>
-              <p class="mb-1"><i class="fas fa-map-marker-alt me-2"></i> Calle Principal #123, Ciudad</p>
-              <p class="mb-1"><i class="fas fa-phone me-2"></i> (123) 456-7890</p>
-              <p class="mb-0"><i class="fas fa-envelope me-2"></i> info@panaderiaelbuengusto.com</p>
+              <h5 class="mb-3">Panadería Pasteleria Charcuteria Orquidea de Oro C.A</h5>
+              <p class="mb-1"><i class="fas fa-map-marker-alt me-2"></i> Centro Comercial Mega Mergado, Flor Amarillo, Valencia, Carabobo</p>
+              <p class="mb-1"><i class="fas fa-phone me-2"></i> +58 424 4133486</p>
+              <p class="mb-0"><i class="fas fa-envelope me-2"></i> kennytorres4444@gmail.com</p>
             </div>
             <div class="col-md-4 mb-3 mb-md-0">
               <h5 class="mb-3">Horario</h5>
-              <p class="mb-1">Lunes a Viernes: 7:00 AM - 8:00 PM</p>
-              <p class="mb-1">Sábados: 8:00 AM - 6:00 PM</p>
-              <p class="mb-0">Domingos: 9:00 AM - 2:00 PM</p>
+              <p class="mb-1">Lunes a Domingo: 6:00 AM - 9:00 PM</p>
+
             </div>
             <div class="col-md-4" id="contacto">
               <h5 class="mb-3">Contáctanos</h5>
@@ -71,7 +70,7 @@
           </div>
           <hr class="my-4 bg-light">
           <div class="text-center">
-            <p class="mb-0">&copy; {{ new Date().getFullYear() }} Panadería El Buen Gusto. Todos los derechos reservados.</p>
+            <p class="mb-0">&copy; {{ new Date().getFullYear() }} Panadería Orquidea de Oro. Todos los derechos reservados.</p>
           </div>
         </div>
       </footer>

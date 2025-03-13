@@ -72,11 +72,11 @@
     <body>
         <div id="app"></div>
         
-        <!-- Admin Link -->
+        <!-- Admin Link 
         <a href="/admin/login" class="admin-link">
             <i class="fas fa-user-shield me-2"></i> Admin
         </a>
-        
+        -->
         <!-- DataTables JS -->
         <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.js"></script>
         

@@ -22750,22 +22750,40 @@ function _toPrimitive(t, r) { if ("object" != typeof t || !t) return t; var e = 
 
     // Funciones del carrito
     const cartItemCount = (0,vue__WEBPACK_IMPORTED_MODULE_0__.computed)(() => {
-      return cart.value.items.reduce((total, item) => total + parseInt(item.quantity), 0);
+      return cart.value.items.reduce((total, item) => total + parseInt(item.quantity || 0), 0);
     });
+
+    // Funciones del carrito
     const addToCart = product => {
-      emit('add-to-cart', {
-        product,
-        quantity: 1
-      });
+      const existingItemIndex = cart.value.items.findIndex(item => item.product.id === product.id);
+      if (existingItemIndex !== -1) {
+        cart.value.items[existingItemIndex].quantity += 1;
+      } else {
+        cart.value.items.push({
+          product: product,
+          quantity: 1
+        });
+      }
+
+      // Guardar carrito en localStorage
+      saveCartToLocalStorage();
 
       // Mostrar notificación
       showNotification('Producto añadido al carrito');
     };
     const addToCartWithQuantity = (product, qty) => {
-      emit('add-to-cart', {
-        product,
-        quantity: parseInt(qty)
-      });
+      const existingItemIndex = cart.value.items.findIndex(item => item.product.id === product.id);
+      if (existingItemIndex !== -1) {
+        cart.value.items[existingItemIndex].quantity += parseInt(qty);
+      } else {
+        cart.value.items.push({
+          product: product,
+          quantity: parseInt(qty)
+        });
+      }
+
+      // Guardar carrito en localStorage
+      saveCartToLocalStorage();
 
       // Cerrar modal y mostrar notificación
       const modal = document.getElementById('productDetailModal');
@@ -22797,25 +22815,6 @@ function _toPrimitive(t, r) { if ("object" != typeof t || !t) return t; var e = 
         cart.value.items[index].quantity = parseInt(cart.value.items[index].quantity) - 1;
         saveCartToLocalStorage();
       }
-    };
-    const calculateItemTotal = item => {
-      return calculateDiscountedPrice(item.product) * item.quantity;
-    };
-    const calculateSubtotal = () => {
-      return cart.value.items.reduce((total, item) => {
-        return total + item.product.precio * item.quantity;
-      }, 0);
-    };
-    const calculateDiscount = () => {
-      return cart.value.items.reduce((total, item) => {
-        const discount = item.product.descuento || 0;
-        return total + item.product.precio * discount / 100 * item.quantity;
-      }, 0);
-    };
-    const calculateTotal = () => {
-      return cart.value.items.reduce((total, item) => {
-        return total + calculateItemTotal(item);
-      }, 0);
     };
     const saveCartToLocalStorage = () => {
       localStorage.setItem('panaderia-cart', JSON.stringify(cart.value));
@@ -22880,7 +22879,15 @@ function _toPrimitive(t, r) { if ("object" != typeof t || !t) return t; var e = 
       }
     };
     const filterByCategory = categoryId => {
-      selectedCategory.value = categoryId;
+      selectedCategory.value = Number(categoryId);
+      (0,vue__WEBPACK_IMPORTED_MODULE_0__.nextTick)(() => {
+        const productosSection = document.getElementById('productos');
+        if (productosSection) {
+          productosSection.scrollIntoView({
+            behavior: 'smooth'
+          });
+        }
+      }, 100);
     };
     const showNotification = message => {
       // Crear un elemento de notificación
@@ -22919,7 +22926,26 @@ function _toPrimitive(t, r) { if ("object" != typeof t || !t) return t; var e = 
         }
       }, 3000);
     };
-
+    // Funciones para calcular totales del carrito
+    const calculateItemTotal = item => {
+      return calculateDiscountedPrice(item.product) * item.quantity;
+    };
+    const calculateSubtotal = () => {
+      return cart.value.items.reduce((total, item) => {
+        return total + item.product.precio * item.quantity;
+      }, 0);
+    };
+    const calculateDiscount = () => {
+      return cart.value.items.reduce((total, item) => {
+        const discount = item.product.descuento || 0;
+        return total + item.product.precio * discount / 100 * item.quantity;
+      }, 0);
+    };
+    const calculateTotal = () => {
+      return cart.value.items.reduce((total, item) => {
+        return total + calculateItemTotal(item);
+      }, 0);
+    };
     // Envío de pedido
     const submitOrder = async () => {
       if (cart.value.items.length === 0) {
@@ -23003,24 +23029,24 @@ function _toPrimitive(t, r) { if ("object" != typeof t || !t) return t; var e = 
       handleImageError,
       getAvailabilityClass,
       getAvailabilityText,
+      filterByCategory,
       addToCart,
       addToCartWithQuantity,
       removeFromCart,
       updateCartItem,
       incrementCartItem,
       decrementCartItem,
+      showProductDetails,
+      incrementQuantity,
+      decrementQuantity,
+      openCart,
+      proceedToCheckout,
+      submitOrder,
+      resetCart,
       calculateItemTotal,
       calculateSubtotal,
       calculateDiscount,
-      calculateTotal,
-      showProductDetails,
-      openCart,
-      proceedToCheckout,
-      incrementQuantity,
-      decrementQuantity,
-      filterByCategory,
-      submitOrder,
-      resetCart
+      calculateTotal
     };
   }
 });
@@ -23782,7 +23808,7 @@ function render(_ctx, _cache, $props, $setup, $data, $options) {
     href: "#"
   }, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("i", {
     class: "fas fa-bread-slice me-2"
-  }), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createTextVNode)("Panadería El Buen Gusto ")], -1 /* HOISTED */)), _cache[5] || (_cache[5] = (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("button", {
+  }), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createTextVNode)("Panadería Orquidea de Oro ")], -1 /* HOISTED */)), _cache[5] || (_cache[5] = (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("button", {
     class: "navbar-toggler",
     type: "button",
     "data-bs-toggle": "collapse",
@@ -23832,7 +23858,7 @@ function render(_ctx, _cache, $props, $setup, $data, $options) {
     onCheckout: $setup.openCheckout
   }, null, 8 /* PROPS */, ["onCheckout"])])])])]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("main", _hoisted_11, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createVNode)(_component_router_view, {
     onAddToCart: $setup.addToCart
-  }, null, 8 /* PROPS */, ["onAddToCart"])]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("footer", _hoisted_12, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_13, [_cache[6] || (_cache[6] = (0,vue__WEBPACK_IMPORTED_MODULE_0__.createStaticVNode)("<div class=\"row\"><div class=\"col-md-4 mb-3 mb-md-0\"><h5 class=\"mb-3\">Panadería El Buen Gusto</h5><p class=\"mb-1\"><i class=\"fas fa-map-marker-alt me-2\"></i> Calle Principal #123, Ciudad</p><p class=\"mb-1\"><i class=\"fas fa-phone me-2\"></i> (123) 456-7890</p><p class=\"mb-0\"><i class=\"fas fa-envelope me-2\"></i> info@panaderiaelbuengusto.com</p></div><div class=\"col-md-4 mb-3 mb-md-0\"><h5 class=\"mb-3\">Horario</h5><p class=\"mb-1\">Lunes a Viernes: 7:00 AM - 8:00 PM</p><p class=\"mb-1\">Sábados: 8:00 AM - 6:00 PM</p><p class=\"mb-0\">Domingos: 9:00 AM - 2:00 PM</p></div><div class=\"col-md-4\" id=\"contacto\"><h5 class=\"mb-3\">Contáctanos</h5><div class=\"d-flex mb-3\"><a href=\"#\" class=\"text-white me-3\"><i class=\"fab fa-facebook-f fa-lg\"></i></a><a href=\"#\" class=\"text-white me-3\"><i class=\"fab fa-instagram fa-lg\"></i></a><a href=\"#\" class=\"text-white me-3\"><i class=\"fab fa-twitter fa-lg\"></i></a><a href=\"#\" class=\"text-white\"><i class=\"fab fa-whatsapp fa-lg\"></i></a></div><p>¿Tienes alguna pregunta o sugerencia? ¡Escríbenos!</p></div></div><hr class=\"my-4 bg-light\">", 2)), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_14, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("p", _hoisted_15, "© " + (0,vue__WEBPACK_IMPORTED_MODULE_0__.toDisplayString)(new Date().getFullYear()) + " Panadería El Buen Gusto. Todos los derechos reservados.", 1 /* TEXT */)])])]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createVNode)(_component_checkout_form, {
+  }, null, 8 /* PROPS */, ["onAddToCart"])]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("footer", _hoisted_12, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_13, [_cache[6] || (_cache[6] = (0,vue__WEBPACK_IMPORTED_MODULE_0__.createStaticVNode)("<div class=\"row\"><div class=\"col-md-4 mb-3 mb-md-0\"><h5 class=\"mb-3\">Panadería Pasteleria Charcuteria Orquidea de Oro C.A</h5><p class=\"mb-1\"><i class=\"fas fa-map-marker-alt me-2\"></i> Centro Comercial Mega Mergado, Flor Amarillo, Valencia, Carabobo</p><p class=\"mb-1\"><i class=\"fas fa-phone me-2\"></i> +58 424 4133486</p><p class=\"mb-0\"><i class=\"fas fa-envelope me-2\"></i> kennytorres4444@gmail.com</p></div><div class=\"col-md-4 mb-3 mb-md-0\"><h5 class=\"mb-3\">Horario</h5><p class=\"mb-1\">Lunes a Domingo: 6:00 AM - 9:00 PM</p></div><div class=\"col-md-4\" id=\"contacto\"><h5 class=\"mb-3\">Contáctanos</h5><div class=\"d-flex mb-3\"><a href=\"#\" class=\"text-white me-3\"><i class=\"fab fa-facebook-f fa-lg\"></i></a><a href=\"#\" class=\"text-white me-3\"><i class=\"fab fa-instagram fa-lg\"></i></a><a href=\"#\" class=\"text-white me-3\"><i class=\"fab fa-twitter fa-lg\"></i></a><a href=\"#\" class=\"text-white\"><i class=\"fab fa-whatsapp fa-lg\"></i></a></div><p>¿Tienes alguna pregunta o sugerencia? ¡Escríbenos!</p></div></div><hr class=\"my-4 bg-light\">", 2)), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_14, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("p", _hoisted_15, "© " + (0,vue__WEBPACK_IMPORTED_MODULE_0__.toDisplayString)(new Date().getFullYear()) + " Panadería Orquidea de Oro. Todos los derechos reservados.", 1 /* TEXT */)])])]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createVNode)(_component_checkout_form, {
     cart: $setup.cart,
     onOrderCompleted: $setup.resetCart,
     ref: "checkoutForm"
@@ -24247,7 +24273,7 @@ function render(_ctx, _cache, $props, $setup, $data, $options) {
     class: "col-lg-6"
   }, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("h1", {
     class: "display-4 fw-bold mb-4"
-  }, "Panadería El Buen Gusto"), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("p", {
+  }, "Panadería Orquidea de Oro"), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("p", {
     class: "lead mb-4"
   }, "Descubre nuestros deliciosos productos horneados con los mejores ingredientes y con todo el amor de nuestra tradición familiar."), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("a", {
     href: "#productos",
@@ -24268,7 +24294,7 @@ function render(_ctx, _cache, $props, $setup, $data, $options) {
     }, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_5, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_6, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_7, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("i", {
       class: (0,vue__WEBPACK_IMPORTED_MODULE_0__.normalizeClass)([category.icon, "fa-3x text-brown"])
     }, null, 2 /* CLASS */)]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("h3", _hoisted_8, (0,vue__WEBPACK_IMPORTED_MODULE_0__.toDisplayString)(category.name), 1 /* TEXT */), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("p", _hoisted_9, (0,vue__WEBPACK_IMPORTED_MODULE_0__.toDisplayString)(category.description), 1 /* TEXT */), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("a", {
-      onClick: $event => $setup.filterByCategory(category.id),
+      onClick: (0,vue__WEBPACK_IMPORTED_MODULE_0__.withModifiers)($event => $setup.filterByCategory(category.id), ["prevent"]),
       href: "#productos",
       class: "btn btn-outline-brown"
     }, "Ver productos", 8 /* PROPS */, _hoisted_10)])])]);
@@ -24877,107 +24903,74 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var vue__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! vue */ "./node_modules/vue/dist/vue.esm-bundler.js");
 
 const _hoisted_1 = {
-  class: "shopping-cart-icon"
+  class: "offcanvas-body"
 };
 const _hoisted_2 = {
   key: 0,
-  class: "position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-};
-const _hoisted_3 = {
-  class: "offcanvas offcanvas-end",
-  tabindex: "-1",
-  id: "shoppingCartOffcanvas"
-};
-const _hoisted_4 = {
-  class: "offcanvas-body"
-};
-const _hoisted_5 = {
-  key: 0,
   class: "text-center py-5"
 };
-const _hoisted_6 = {
+const _hoisted_3 = {
   key: 1
 };
-const _hoisted_7 = {
+const _hoisted_4 = {
   class: "list-group mb-3"
 };
-const _hoisted_8 = {
+const _hoisted_5 = {
   class: "d-flex"
 };
-const _hoisted_9 = {
+const _hoisted_6 = {
   class: "flex-shrink-0"
 };
-const _hoisted_10 = ["src", "alt"];
-const _hoisted_11 = {
+const _hoisted_7 = ["src", "alt"];
+const _hoisted_8 = {
   class: "flex-grow-1 ms-3"
 };
-const _hoisted_12 = {
+const _hoisted_9 = {
   class: "d-flex justify-content-between align-items-center"
 };
-const _hoisted_13 = {
+const _hoisted_10 = {
   class: "mb-0 text-brown"
 };
-const _hoisted_14 = ["onClick"];
-const _hoisted_15 = {
+const _hoisted_11 = ["onClick"];
+const _hoisted_12 = {
   class: "d-flex justify-content-between align-items-center mt-2"
 };
-const _hoisted_16 = {
+const _hoisted_13 = {
   class: "input-group input-group-sm",
   style: {
     "width": "100px"
   }
 };
-const _hoisted_17 = ["onClick"];
-const _hoisted_18 = ["onUpdate:modelValue", "onChange"];
-const _hoisted_19 = ["onClick"];
-const _hoisted_20 = {
+const _hoisted_14 = ["onClick"];
+const _hoisted_15 = ["onUpdate:modelValue", "onChange"];
+const _hoisted_16 = ["onClick"];
+const _hoisted_17 = {
   class: "text-brown fw-bold"
 };
-const _hoisted_21 = {
+const _hoisted_18 = {
   class: "card bg-cream mb-3"
 };
-const _hoisted_22 = {
+const _hoisted_19 = {
   class: "card-body"
 };
-const _hoisted_23 = {
+const _hoisted_20 = {
   class: "d-flex justify-content-between mb-2"
 };
-const _hoisted_24 = {
+const _hoisted_21 = {
   class: "d-flex justify-content-between mb-2"
 };
-const _hoisted_25 = {
+const _hoisted_22 = {
   class: "d-flex justify-content-between fw-bold"
 };
-const _hoisted_26 = {
+const _hoisted_23 = {
   class: "d-grid gap-2"
 };
 function render(_ctx, _cache, $props, $setup, $data, $options) {
-  return (0,vue__WEBPACK_IMPORTED_MODULE_0__.openBlock)(), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementBlock)("div", _hoisted_1, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("button", {
-    onClick: _cache[0] || (_cache[0] = (...args) => $setup.openCart && $setup.openCart(...args)),
-    class: "btn btn-brown position-relative"
-  }, [_cache[3] || (_cache[3] = (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("i", {
-    class: "fas fa-shopping-cart me-2"
-  }, null, -1 /* HOISTED */)), _cache[4] || (_cache[4] = (0,vue__WEBPACK_IMPORTED_MODULE_0__.createTextVNode)("Carrito ")), $setup.cartItemCount > 0 ? ((0,vue__WEBPACK_IMPORTED_MODULE_0__.openBlock)(), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementBlock)("span", _hoisted_2, (0,vue__WEBPACK_IMPORTED_MODULE_0__.toDisplayString)($setup.cartItemCount), 1 /* TEXT */)) : (0,vue__WEBPACK_IMPORTED_MODULE_0__.createCommentVNode)("v-if", true)]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createCommentVNode)(" Shopping Cart Offcanvas "), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_3, [_cache[12] || (_cache[12] = (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", {
-    class: "offcanvas-header bg-brown text-white"
-  }, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("h5", {
-    class: "offcanvas-title"
-  }, "Carrito de Compras"), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("button", {
-    type: "button",
-    class: "btn-close text-reset btn-close-white",
-    "data-bs-dismiss": "offcanvas",
-    "aria-label": "Close"
-  })], -1 /* HOISTED */)), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_4, [$setup.cart.items.length === 0 ? ((0,vue__WEBPACK_IMPORTED_MODULE_0__.openBlock)(), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementBlock)("div", _hoisted_5, _cache[5] || (_cache[5] = [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("i", {
-    class: "fas fa-shopping-cart fa-3x text-muted mb-3"
-  }, null, -1 /* HOISTED */), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("h5", {
-    class: "text-muted"
-  }, "Tu carrito está vacío", -1 /* HOISTED */), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("p", null, "Agrega algunos productos deliciosos", -1 /* HOISTED */), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("button", {
-    class: "btn btn-brown",
-    "data-bs-dismiss": "offcanvas"
-  }, "Continuar comprando", -1 /* HOISTED */)]))) : ((0,vue__WEBPACK_IMPORTED_MODULE_0__.openBlock)(), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementBlock)("div", _hoisted_6, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_7, [((0,vue__WEBPACK_IMPORTED_MODULE_0__.openBlock)(true), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementBlock)(vue__WEBPACK_IMPORTED_MODULE_0__.Fragment, null, (0,vue__WEBPACK_IMPORTED_MODULE_0__.renderList)($setup.cart.items, (item, index) => {
+  return (0,vue__WEBPACK_IMPORTED_MODULE_0__.openBlock)(), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementBlock)(vue__WEBPACK_IMPORTED_MODULE_0__.Fragment, null, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createCommentVNode)(" Shopping Cart Offcanvas "), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_1, [$setup.cart.items.length === 0 ? ((0,vue__WEBPACK_IMPORTED_MODULE_0__.openBlock)(), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementBlock)("div", _hoisted_2)) : ((0,vue__WEBPACK_IMPORTED_MODULE_0__.openBlock)(), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementBlock)("div", _hoisted_3, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_4, [((0,vue__WEBPACK_IMPORTED_MODULE_0__.openBlock)(true), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementBlock)(vue__WEBPACK_IMPORTED_MODULE_0__.Fragment, null, (0,vue__WEBPACK_IMPORTED_MODULE_0__.renderList)($setup.cart.items, (item, index) => {
     return (0,vue__WEBPACK_IMPORTED_MODULE_0__.openBlock)(), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementBlock)("div", {
       key: index,
       class: "list-group-item bg-beige border-brown"
-    }, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_8, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_9, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("img", {
+    }, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_5, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_6, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("img", {
       src: $setup.getProductImage(item.product),
       class: "img-thumbnail",
       alt: item.product.titulo,
@@ -24986,36 +24979,36 @@ function render(_ctx, _cache, $props, $setup, $data, $options) {
         "height": "60px",
         "object-fit": "cover"
       },
-      onError: _cache[1] || (_cache[1] = (...args) => $setup.handleImageError && $setup.handleImageError(...args))
-    }, null, 40 /* PROPS, NEED_HYDRATION */, _hoisted_10)]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_11, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_12, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("h6", _hoisted_13, (0,vue__WEBPACK_IMPORTED_MODULE_0__.toDisplayString)(item.product.titulo), 1 /* TEXT */), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("button", {
+      onError: _cache[0] || (_cache[0] = (...args) => $setup.handleImageError && $setup.handleImageError(...args))
+    }, null, 40 /* PROPS, NEED_HYDRATION */, _hoisted_7)]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_8, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_9, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("h6", _hoisted_10, (0,vue__WEBPACK_IMPORTED_MODULE_0__.toDisplayString)(item.product.titulo), 1 /* TEXT */), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("button", {
       onClick: $event => $setup.removeFromCart(index),
       class: "btn btn-sm text-danger"
-    }, [...(_cache[6] || (_cache[6] = [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("i", {
+    }, [...(_cache[2] || (_cache[2] = [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("i", {
       class: "fas fa-trash"
-    }, null, -1 /* HOISTED */)]))], 8 /* PROPS */, _hoisted_14)]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_15, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_16, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("button", {
+    }, null, -1 /* HOISTED */)]))], 8 /* PROPS */, _hoisted_11)]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_12, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_13, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("button", {
       class: "btn btn-outline-brown",
       type: "button",
       onClick: $event => $setup.decrementCartItem(index)
-    }, "-", 8 /* PROPS */, _hoisted_17), (0,vue__WEBPACK_IMPORTED_MODULE_0__.withDirectives)((0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("input", {
+    }, "-", 8 /* PROPS */, _hoisted_14), (0,vue__WEBPACK_IMPORTED_MODULE_0__.withDirectives)((0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("input", {
       type: "number",
       class: "form-control text-center",
       "onUpdate:modelValue": $event => item.quantity = $event,
       min: "1",
       onChange: $event => $setup.updateCartItem(index, item.quantity)
-    }, null, 40 /* PROPS, NEED_HYDRATION */, _hoisted_18), [[vue__WEBPACK_IMPORTED_MODULE_0__.vModelText, item.quantity]]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("button", {
+    }, null, 40 /* PROPS, NEED_HYDRATION */, _hoisted_15), [[vue__WEBPACK_IMPORTED_MODULE_0__.vModelText, item.quantity]]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("button", {
       class: "btn btn-outline-brown",
       type: "button",
       onClick: $event => $setup.incrementCartItem(index)
-    }, "+", 8 /* PROPS */, _hoisted_19)]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("span", _hoisted_20, (0,vue__WEBPACK_IMPORTED_MODULE_0__.toDisplayString)($setup.formatPrice($setup.calculateItemTotal(item))), 1 /* TEXT */)])])])]);
-  }), 128 /* KEYED_FRAGMENT */))]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_21, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_22, [_cache[10] || (_cache[10] = (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("h6", {
+    }, "+", 8 /* PROPS */, _hoisted_16)]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("span", _hoisted_17, (0,vue__WEBPACK_IMPORTED_MODULE_0__.toDisplayString)($setup.formatPrice($setup.calculateItemTotal(item))), 1 /* TEXT */)])])])]);
+  }), 128 /* KEYED_FRAGMENT */))]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_18, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_19, [_cache[6] || (_cache[6] = (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("h6", {
     class: "card-title text-brown"
-  }, "Resumen del pedido", -1 /* HOISTED */)), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_23, [_cache[7] || (_cache[7] = (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("span", null, "Subtotal", -1 /* HOISTED */)), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("span", null, (0,vue__WEBPACK_IMPORTED_MODULE_0__.toDisplayString)($setup.formatPrice($setup.calculateSubtotal())), 1 /* TEXT */)]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_24, [_cache[8] || (_cache[8] = (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("span", null, "Descuento", -1 /* HOISTED */)), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("span", null, "-" + (0,vue__WEBPACK_IMPORTED_MODULE_0__.toDisplayString)($setup.formatPrice($setup.calculateDiscount())), 1 /* TEXT */)]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_25, [_cache[9] || (_cache[9] = (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("span", null, "Total", -1 /* HOISTED */)), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("span", null, (0,vue__WEBPACK_IMPORTED_MODULE_0__.toDisplayString)($setup.formatPrice($setup.calculateTotal())), 1 /* TEXT */)])])]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_26, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("button", {
-    onClick: _cache[2] || (_cache[2] = (...args) => $setup.proceedToCheckout && $setup.proceedToCheckout(...args)),
+  }, "Resumen del pedido", -1 /* HOISTED */)), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_20, [_cache[3] || (_cache[3] = (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("span", null, "Subtotal", -1 /* HOISTED */)), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("span", null, (0,vue__WEBPACK_IMPORTED_MODULE_0__.toDisplayString)($setup.formatPrice($setup.calculateSubtotal())), 1 /* TEXT */)]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_21, [_cache[4] || (_cache[4] = (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("span", null, "Descuento", -1 /* HOISTED */)), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("span", null, "-" + (0,vue__WEBPACK_IMPORTED_MODULE_0__.toDisplayString)($setup.formatPrice($setup.calculateDiscount())), 1 /* TEXT */)]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_22, [_cache[5] || (_cache[5] = (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("span", null, "Total", -1 /* HOISTED */)), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("span", null, (0,vue__WEBPACK_IMPORTED_MODULE_0__.toDisplayString)($setup.formatPrice($setup.calculateTotal())), 1 /* TEXT */)])])]), (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("div", _hoisted_23, [(0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("button", {
+    onClick: _cache[1] || (_cache[1] = (...args) => $setup.proceedToCheckout && $setup.proceedToCheckout(...args)),
     class: "btn btn-brown"
-  }, " Proceder al pago "), _cache[11] || (_cache[11] = (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("button", {
+  }, " Proceder al pago "), _cache[7] || (_cache[7] = (0,vue__WEBPACK_IMPORTED_MODULE_0__.createElementVNode)("button", {
     class: "btn btn-outline-brown",
     "data-bs-dismiss": "offcanvas"
-  }, " Continuar comprando ", -1 /* HOISTED */))])]))])])]);
+  }, " Continuar comprando ", -1 /* HOISTED */))])]))])], 2112 /* STABLE_FRAGMENT, DEV_ROOT_FRAGMENT */);
 }
 
 /***/ }),

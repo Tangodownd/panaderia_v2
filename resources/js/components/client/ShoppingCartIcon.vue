@@ -1,24 +1,13 @@
 <template>
-  <div class="shopping-cart-icon">
-    <button @click="openCart" class="btn btn-brown position-relative">
-      <i class="fas fa-shopping-cart me-2"></i>Carrito
-      <span v-if="cartItemCount > 0" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-        {{ cartItemCount }}
-      </span>
-    </button>
+
     
     <!-- Shopping Cart Offcanvas -->
-    <div class="offcanvas offcanvas-end" tabindex="-1" id="shoppingCartOffcanvas">
-      <div class="offcanvas-header bg-brown text-white">
-        <h5 class="offcanvas-title">Carrito de Compras</h5>
-        <button type="button" class="btn-close text-reset btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-      </div>
+
       <div class="offcanvas-body">
         <div v-if="cart.items.length === 0" class="text-center py-5">
-          <i class="fas fa-shopping-cart fa-3x text-muted mb-3"></i>
-          <h5 class="text-muted">Tu carrito está vacío</h5>
-          <p>Agrega algunos productos deliciosos</p>
-          <button class="btn btn-brown" data-bs-dismiss="offcanvas">Continuar comprando</button>
+        
+
+
         </div>
         
         <div v-else>
@@ -82,8 +71,8 @@
           </div>
         </div>
       </div>
-    </div>
-  </div>
+
+
 </template>
 
 <script>

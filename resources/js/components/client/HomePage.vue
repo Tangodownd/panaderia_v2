@@ -5,7 +5,7 @@
       <div class="container">
         <div class="row align-items-center">
           <div class="col-lg-6">
-            <h1 class="display-4 fw-bold mb-4">Panadería El Buen Gusto</h1>
+            <h1 class="display-4 fw-bold mb-4">Panadería Orquidea de Oro</h1>
             <p class="lead mb-4">Descubre nuestros deliciosos productos horneados con los mejores ingredientes y con todo el amor de nuestra tradición familiar.</p>
             <a href="#productos" class="btn btn-light btn-lg px-4">Ver Productos</a>
           </div>
@@ -30,7 +30,7 @@
                 </div>
                 <h3 class="card-title h5 text-brown">{{ category.name }}</h3>
                 <p class="card-text text-muted">{{ category.description }}</p>
-                <a @click="filterByCategory(category.id)" href="#productos" class="btn btn-outline-brown">Ver productos</a>
+                <a @click.prevent="filterByCategory(category.id)" href="#productos" class="btn btn-outline-brown">Ver productos</a>
               </div>
             </div>
           </div>
@@ -450,7 +450,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, nextTick, watch } from 'vue';
 import axios from 'axios';
 
 export default {
@@ -471,6 +471,8 @@ export default {
       items: [],
       total: 0
     });
+
+    
     const checkout = ref({
       name: '',
       email: '',
@@ -528,6 +530,7 @@ export default {
 
     // Filtrado y ordenación de productos
     const filteredProducts = computed(() => {
+      
       let result = products.value.filter(product => {
         const matchesSearch = product.titulo.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
                              (product.contenido && product.contenido.toLowerCase().includes(searchQuery.value.toLowerCase()));
@@ -535,6 +538,7 @@ export default {
         const matchesAvailability = availabilityFilter.value ? product.availabilityStatus === availabilityFilter.value : true;
         
         return matchesSearch && matchesCategory && matchesAvailability;
+        
       });
 
       // Ordenar productos
@@ -553,6 +557,7 @@ export default {
       return result;
     });
 
+
     // Funciones de utilidad
     const truncateText = (text, length) => {
       if (!text) return '';
@@ -568,6 +573,8 @@ export default {
       const discount = product.descuento || 0;
       return product.precio * (1 - discount / 100);
     };
+
+    
 
     const getProductImage = (product) => {
   if (!product || (!product.thumbnail && !product.image)) {
@@ -627,93 +634,95 @@ export default {
 
     // Funciones del carrito
     const cartItemCount = computed(() => {
-      return cart.value.items.reduce((total, item) => total + parseInt(item.quantity), 0);
+      return cart.value.items.reduce((total, item) => total + parseInt(item.quantity || 0), 0);
     });
 
-    const addToCart = (product) => {
-      emit('add-to-cart', { product, quantity: 1 });
-      
-      // Mostrar notificación
-      showNotification('Producto añadido al carrito');
-    };
+// Funciones del carrito
+const addToCart = (product) => {
+  const existingItemIndex = cart.value.items.findIndex(item => item.product.id === product.id);
+  
+  if (existingItemIndex !== -1) {
+    cart.value.items[existingItemIndex].quantity += 1;
+  } else {
+    cart.value.items.push({
+      product: product,
+      quantity: 1
+    });
+  }
+  
+  // Guardar carrito en localStorage
+  saveCartToLocalStorage();
+  
+  // Mostrar notificación
+  showNotification('Producto añadido al carrito');
+};
 
-    const addToCartWithQuantity = (product, qty) => {
-      emit('add-to-cart', { product, quantity: parseInt(qty) });
-      
-      // Cerrar modal y mostrar notificación
-      const modal = document.getElementById('productDetailModal');
-      if (modal && typeof bootstrap !== 'undefined') {
-        const modalInstance = bootstrap.Modal.getInstance(modal);
-        if (modalInstance) modalInstance.hide();
-      }
-      
-      // Mostrar notificación
-      showNotification('Producto añadido al carrito');
-    };
+const addToCartWithQuantity = (product, qty) => {
+  const existingItemIndex = cart.value.items.findIndex(item => item.product.id === product.id);
+  
+  if (existingItemIndex !== -1) {
+    cart.value.items[existingItemIndex].quantity += parseInt(qty);
+  } else {
+    cart.value.items.push({
+      product: product,
+      quantity: parseInt(qty)
+    });
+  }
+  
+  // Guardar carrito en localStorage
+  saveCartToLocalStorage();
+  
+  // Cerrar modal y mostrar notificación
+  const modal = document.getElementById('productDetailModal');
+  if (modal && typeof bootstrap !== 'undefined') {
+    const modalInstance = bootstrap.Modal.getInstance(modal);
+    if (modalInstance) modalInstance.hide();
+  }
+  
+  // Mostrar notificación
+  showNotification('Producto añadido al carrito');
+};
 
-    const removeFromCart = (index) => {
-      cart.value.items.splice(index, 1);
-      saveCartToLocalStorage();
-    };
+const removeFromCart = (index) => {
+  cart.value.items.splice(index, 1);
+  saveCartToLocalStorage();
+};
 
-    const updateCartItem = (index, quantity) => {
-      cart.value.items[index].quantity = parseInt(quantity);
-      if (cart.value.items[index].quantity < 1) {
-        cart.value.items[index].quantity = 1;
-      }
-      saveCartToLocalStorage();
-    };
+const updateCartItem = (index, quantity) => {
+  cart.value.items[index].quantity = parseInt(quantity);
+  if (cart.value.items[index].quantity < 1) {
+    cart.value.items[index].quantity = 1;
+  }
+  saveCartToLocalStorage();
+};
 
-    const incrementCartItem = (index) => {
-      cart.value.items[index].quantity = parseInt(cart.value.items[index].quantity) + 1;
-      saveCartToLocalStorage();
-    };
+const incrementCartItem = (index) => {
+  cart.value.items[index].quantity = parseInt(cart.value.items[index].quantity) + 1;
+  saveCartToLocalStorage();
+};
 
-    const decrementCartItem = (index) => {
-      if (cart.value.items[index].quantity > 1) {
-        cart.value.items[index].quantity = parseInt(cart.value.items[index].quantity) - 1;
-        saveCartToLocalStorage();
-      }
-    };
+const decrementCartItem = (index) => {
+  if (cart.value.items[index].quantity > 1) {
+    cart.value.items[index].quantity = parseInt(cart.value.items[index].quantity) - 1;
+    saveCartToLocalStorage();
+  }
+};
 
-    const calculateItemTotal = (item) => {
-      return calculateDiscountedPrice(item.product) * item.quantity;
-    };
+const saveCartToLocalStorage = () => {
+  localStorage.setItem('panaderia-cart', JSON.stringify(cart.value));
+};
 
-    const calculateSubtotal = () => {
-      return cart.value.items.reduce((total, item) => {
-        return total + (item.product.precio * item.quantity);
-      }, 0);
-    };
-
-    const calculateDiscount = () => {
-      return cart.value.items.reduce((total, item) => {
-        const discount = item.product.descuento || 0;
-        return total + ((item.product.precio * discount / 100) * item.quantity);
-      }, 0);
-    };
-
-    const calculateTotal = () => {
-      return cart.value.items.reduce((total, item) => {
-        return total + calculateItemTotal(item);
-      }, 0);
-    };
-
-    const saveCartToLocalStorage = () => {
-      localStorage.setItem('panaderia-cart', JSON.stringify(cart.value));
-    };
-
-    const loadCartFromLocalStorage = () => {
-      const savedCart = localStorage.getItem('panaderia-cart');
-      if (savedCart) {
-        try {
-          cart.value = JSON.parse(savedCart);
-        } catch (e) {
-          console.error('Error al cargar el carrito desde localStorage:', e);
-          cart.value = { items: [], total: 0 };
-        }
-      }
-    };
+const loadCartFromLocalStorage = () => {
+  const savedCart = localStorage.getItem('panaderia-cart');
+  if (savedCart) {
+    try {
+      cart.value = JSON.parse(savedCart);
+    } catch (e) {
+      console.error('Error al cargar el carrito desde localStorage:', e);
+      cart.value = { items: [], total: 0 };
+    }
+  }
+};
 
     const resetCart = () => {
       cart.value = {
@@ -768,9 +777,14 @@ export default {
     };
 
     const filterByCategory = (categoryId) => {
-      selectedCategory.value = categoryId;
+      selectedCategory.value = Number(categoryId);
+      nextTick(() => {
+    const productosSection = document.getElementById('productos');
+    if (productosSection) {
+      productosSection.scrollIntoView({ behavior: 'smooth' });
+    }
+      }, 100);
     };
-
     const showNotification = (message) => {
       // Crear un elemento de notificación
       const notification = document.createElement('div');
@@ -808,7 +822,29 @@ export default {
         }
       }, 3000);
     };
+    // Funciones para calcular totales del carrito
+    const calculateItemTotal = (item) => {
+      return calculateDiscountedPrice(item.product) * item.quantity;
+    };
 
+    const calculateSubtotal = () => {
+      return cart.value.items.reduce((total, item) => {
+        return total + (item.product.precio * item.quantity);
+      }, 0);
+    };
+
+    const calculateDiscount = () => {
+      return cart.value.items.reduce((total, item) => {
+        const discount = item.product.descuento || 0;
+        return total + ((item.product.precio * discount / 100) * item.quantity);
+      }, 0);
+    };
+
+    const calculateTotal = () => {
+      return cart.value.items.reduce((total, item) => {
+        return total + calculateItemTotal(item);
+      }, 0);
+    };
     // Envío de pedido
     const submitOrder = async () => {
       if (cart.value.items.length === 0) {
@@ -873,50 +909,50 @@ export default {
     });
 
     return {
-      products,
-      categories,
-      featuredCategories,
-      loading,
-      searchQuery,
-      selectedCategory,
-      sortBy,
-      availabilityFilter,
-      filteredProducts,
-      selectedProduct,
-      quantity,
-      cart,
-      cartItemCount,
-      checkout,
-      isSubmitting,
-      orderNumber,
-      
-      // Métodos
-      truncateText,
-      formatPrice,
-      calculateDiscountedPrice,
-      getProductImage,
-      handleImageError,
-      getAvailabilityClass,
-      getAvailabilityText,
-      addToCart,
-      addToCartWithQuantity,
-      removeFromCart,
-      updateCartItem,
-      incrementCartItem,
-      decrementCartItem,
-      calculateItemTotal,
-      calculateSubtotal,
-      calculateDiscount,
-      calculateTotal,
-      showProductDetails,
-      openCart,
-      proceedToCheckout,
-      incrementQuantity,
-      decrementQuantity,
-      filterByCategory,
-      submitOrder,
-      resetCart
-    };
+  products,
+  categories,
+  featuredCategories,
+  loading,
+  searchQuery,
+  selectedCategory,
+  sortBy,
+  availabilityFilter,
+  filteredProducts,
+  selectedProduct,
+  quantity,
+  cart,
+  cartItemCount,
+  checkout,
+  isSubmitting,
+  orderNumber,
+  
+  // Métodos
+  truncateText,
+  formatPrice,
+  calculateDiscountedPrice,
+  getProductImage,
+  handleImageError,
+  getAvailabilityClass,
+  getAvailabilityText,
+  filterByCategory,
+  addToCart,
+  addToCartWithQuantity,
+  removeFromCart,
+  updateCartItem,
+  incrementCartItem,
+  decrementCartItem,
+  showProductDetails,
+  incrementQuantity,
+  decrementQuantity,
+  openCart,
+  proceedToCheckout,
+  submitOrder,
+  resetCart,
+  calculateItemTotal,
+  calculateSubtotal,
+  calculateDiscount,
+  calculateTotal
+};
   }
 };
 </script>
