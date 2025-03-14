@@ -1,26 +1,45 @@
+/**
+ * First we will load all of this project's JavaScript dependencies which
+ * includes Vue and other libraries. It is a great starting point when
+ * building robust, powerful web applications using Vue and Laravel.
+ */
+
 require("./bootstrap")
-import { createApp } from "vue"
 
-import App from "./components/App.vue"
+window.Vue = require("vue").default
 
-// Import Axios
-import VueAxios from "vue-axios"
-import axios from "axios"
+/**
+ * The following block of code may be used to automatically register your
+ * Vue components. It will recursively scan this directory for the Vue
+ * components and automatically register them with their "basename".
+ *
+ * Eg. ./components/ExampleComponent.vue -> <example-component></example-component>
+ */
 
-// Import and configure Vue Router
-import router from "./routes"
-import $ from "jquery"
+// const files = require.context('./', true, /\.vue$/i)
+// files.keys().map(key => Vue.component(key.split('/').pop().split('.')[0], files(key).default))
 
-// Create and mount the Vue app
-const app = createApp(App)
-app.use(router)
-app.use(VueAxios, axios)
-app.mount("#app")
+Vue.component("client-app", require("./components/client/ClientApp.vue").default)
+Vue.component("admin-app", require("./components/admin/AdminApp.vue").default)
 
-// Inicializar DataTables (se hará desde el HTML con jQuery)
-$(document).ready(() => {
-  if ($.fn.DataTable && $("#example").length) {
-    $("#example").DataTable()
-  }
+/**
+ * Next, we will create a fresh Vue application instance and attach it to
+ * the page. Then, you may begin adding components to this application
+ * or customize the JavaScript scaffolding to fit your unique needs.
+ */
+
+const app = new Vue({
+  el: "#app",
+})
+
+// Inicializar Bootstrap tooltips y popovers
+document.addEventListener("DOMContentLoaded", () => {
+  // Inicializar tooltips
+  var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+  tooltipTriggerList.map((tooltipTriggerEl) => new bootstrap.Tooltip(tooltipTriggerEl))
+
+  // Inicializar popovers
+  var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
+  popoverTriggerList.map((popoverTriggerEl) => new bootstrap.Popover(popoverTriggerEl))
 })
 

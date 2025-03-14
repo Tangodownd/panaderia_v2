@@ -26,9 +26,22 @@ class Product extends Model
         'rating' => 'decimal:2',
     ];
 
+    /**
+     * Get the category that owns the product.
+     */
     public function category()
     {
         return $this->belongsTo(Category::class);
+    }
+
+    /**
+     * Get the carts that contain this product.
+     */
+    public function carts()
+    {
+        return $this->belongsToMany(Cart::class, 'cart_items')
+                    ->withPivot('quantity', 'price')
+                    ->withTimestamps();
     }
 }
 

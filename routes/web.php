@@ -2,6 +2,8 @@
 
 use Illuminate\Support\Facades\Route;
 
+
+
 // Ruta para el panel de administración (debe ir PRIMERO)
 Route::get('/admin/{any?}', function () {
     return view('admin');
@@ -11,4 +13,7 @@ Route::get('/admin/{any?}', function () {
 Route::get('/{any?}', function () {
     return view('tienda');
 })->where('any', '.*');
+
+
+
 

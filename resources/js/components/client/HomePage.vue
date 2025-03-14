@@ -724,13 +724,28 @@ const loadCartFromLocalStorage = () => {
   }
 };
 
-    const resetCart = () => {
-      cart.value = {
-        items: [],
-        total: 0
-      };
-      saveCartToLocalStorage();
-    };
+const resetCart = () => {
+  cart.value = {
+    items: [],
+    total: 0
+  };
+  saveCartToLocalStorage();
+  
+  // Recargar los productos después de completar un pedido
+  setTimeout(() => {
+    fetchProducts();
+  }, 500);
+};
+
+const handleOrderCompleted = () => {
+  // Recargar explícitamente el carrito después de completar un pedido
+  resetCart();
+  
+  // Recargar productos con un pequeño retraso
+  setTimeout(() => {
+    fetchProducts();
+  }, 500);
+};
 
     // Funciones de UI
     const showProductDetails = (product) => {
@@ -786,42 +801,57 @@ const loadCartFromLocalStorage = () => {
       }, 100);
     };
     const showNotification = (message) => {
-      // Crear un elemento de notificación
-      const notification = document.createElement('div');
-      notification.className = 'toast align-items-center text-white bg-success border-0 position-fixed bottom-0 end-0 m-3';
-      notification.setAttribute('role', 'alert');
-      notification.setAttribute('aria-live', 'assertive');
-      notification.setAttribute('aria-atomic', 'true');
-      
-      notification.innerHTML = `
-        <div class="d-flex">
-          <div class="toast-body">
-            ${message}
-          </div>
-          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-        </div>
-      `;
-      
-      document.body.appendChild(notification);
-      
-      // Mostrar la notificación
-      if (typeof bootstrap !== 'undefined') {
-        const toast = new bootstrap.Toast(notification, { delay: 3000 });
-        toast.show();
-      }
-      
-      // Eliminar la notificación después de ocultarse
-      notification.addEventListener('hidden.bs.toast', function () {
-        document.body.removeChild(notification);
-      });
-      
-      // Eliminar la notificación después de 3 segundos en caso de que bootstrap no esté disponible
-      setTimeout(() => {
-        if (document.body.contains(notification)) {
-          document.body.removeChild(notification);
+  // Crear un elemento de notificación con ID único
+  const toastId = 'toast-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+  const notification = document.createElement('div');
+  notification.id = toastId;
+  notification.className = 'toast align-items-center text-white bg-success border-0 position-fixed bottom-0 end-0 m-3';
+  notification.setAttribute('role', 'alert');
+  notification.setAttribute('aria-live', 'assertive');
+  notification.setAttribute('aria-atomic', 'true');
+  
+  notification.innerHTML = `
+    <div class="d-flex">
+      <div class="toast-body">
+        ${message}
+      </div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  // Mostrar la notificación
+  if (typeof bootstrap !== 'undefined') {
+    const toast = new bootstrap.Toast(notification, { delay: 3000 });
+    
+    // Manejar el evento hidden.bs.toast de forma segura
+    notification.addEventListener('hidden.bs.toast', function () {
+      // Verificar si el elemento todavía existe en el DOM
+      const toastElement = document.getElementById(toastId);
+      if (toastElement && document.body.contains(toastElement)) {
+        try {
+          document.body.removeChild(toastElement);
+        } catch (e) {
+          console.error('Error al eliminar toast:', e);
         }
-      }, 3000);
-    };
+      }
+    });
+    
+    toast.show();
+  } else {
+    // Fallback si bootstrap no está disponible
+    setTimeout(() => {
+      if (document.getElementById(toastId) && document.body.contains(notification)) {
+        try {
+          document.body.removeChild(notification);
+        } catch (e) {
+          console.error('Error al eliminar toast (fallback):', e);
+        }
+      }
+    }, 3000);
+  }
+};
     // Funciones para calcular totales del carrito
     const calculateItemTotal = (item) => {
       return calculateDiscountedPrice(item.product) * item.quantity;
@@ -919,6 +949,7 @@ const loadCartFromLocalStorage = () => {
   availabilityFilter,
   filteredProducts,
   selectedProduct,
+  
   quantity,
   cart,
   cartItemCount,
@@ -948,6 +979,7 @@ const loadCartFromLocalStorage = () => {
   proceedToCheckout,
   submitOrder,
   resetCart,
+  handleOrderCompleted,
   calculateItemTotal,
   calculateSubtotal,
   calculateDiscount,
