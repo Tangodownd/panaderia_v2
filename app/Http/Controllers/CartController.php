@@ -270,18 +270,50 @@ class CartController extends Controller
  */
 public function markAsCompleted(Request $request)
 {
+    \Log::info('CartController@markAsCompleted - Request:', [
+        'user_id' => auth()->id(),
+        'session_id' => $request->cookie('cart_session_id')
+    ]);
+    
     // Obtener el carrito actual
     $cart = $this->getOrCreateCart($request);
     
+    // Marcar el carrito actual como completado
+    $cart->status = 'completed';
+    
+    // Asegurarse de que el total esté correctamente calculado antes de marcar como completado
+    $total = CartItem::where('cart_id', $cart->id)
+        ->sum(\DB::raw('quantity * price'));
+    
+    // Actualizar el total en el carrito
+    $cart->total = $total;
+    $cart->save();
+    
+    \Log::info('Carrito marcado como completado', [
+        'cart_id' => $cart->id, 
+        'total' => $cart->total,
+        'status' => $cart->status
+    ]);
+    
     // Crear un nuevo carrito para el usuario/sesión
     $newCart = new Cart();
-    $newCart->user_id = auth()->id();
+    if (auth()->check()) {
+        $newCart->user_id = auth()->id();
+    }
     $newCart->session_id = $cart->session_id;
     $newCart->total = 0;
+    $newCart->status = 'active'; // Asegurarse de que el nuevo carrito esté activo
     $newCart->save();
+    
+    \Log::info('Nuevo carrito creado', [
+        'cart_id' => $newCart->id, 
+        'session_id' => $newCart->session_id
+    ]);
     
     // Devolver el nuevo carrito vacío
     return response()->json([
+        'success' => true,
+        'message' => 'Carrito marcado como completado',
         'cart' => $newCart,
         'items' => []
     ]);

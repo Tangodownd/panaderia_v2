@@ -15,6 +15,9 @@ class Cart extends Model
         'total',
     ];
 
+    protected $casts = [
+        'total' => 'float',
+    ];
     /**
      * Obtener los items del carrito
      */
