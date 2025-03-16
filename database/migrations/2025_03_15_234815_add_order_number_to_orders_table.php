@@ -4,7 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-class AddDiscountToProductsTable extends Migration
+class AddOrderNumberToOrdersTable extends Migration
 {
     /**
      * Run the migrations.
@@ -13,9 +13,8 @@ class AddDiscountToProductsTable extends Migration
      */
     public function up()
     {
-        Schema::table('products', function (Blueprint $table) {
-            $table->decimal('discount', 5, 2)->default(0);
-            $table->decimal('rating', 3, 2)->default(0)->nullable();
+        Schema::table('orders', function (Blueprint $table) {
+            $table->string('order_number')->nullable()->after('id');
         });
     }
 
@@ -26,8 +25,8 @@ class AddDiscountToProductsTable extends Migration
      */
     public function down()
     {
-        Schema::table('products', function (Blueprint $table) {
-            $table->dropColumn(['discount', 'rating']);
+        Schema::table('orders', function (Blueprint $table) {
+            $table->dropColumn('order_number');
         });
     }
 }

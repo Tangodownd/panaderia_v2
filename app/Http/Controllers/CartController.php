@@ -2,101 +2,138 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Product;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Log;
 
 class CartController extends Controller
 {
     /**
-     * Get the current cart or create a new one
+     * Obtener o crear el carrito para el usuario o sesión actual
      */
-    public function getCart(Request $request)
+    private function getOrCreateCart(Request $request)
     {
-        // Obtener o crear un carrito basado en la sesión
+        // Depurar información
+        \Log::info('getOrCreateCart - Request:', [
+            'user_id' => auth()->id(),
+            'session_id' => $request->cookie('cart_session_id'),
+            'headers' => $request->headers->all(),
+            'cookies' => $request->cookies->all()
+        ]);
+        
+        // Si el usuario está autenticado, buscar por user_id
+        if (auth()->check()) {
+            $cart = Cart::where('user_id', auth()->id())->first();
+            
+            if ($cart) {
+                \Log::info('Carrito encontrado por user_id', ['cart_id' => $cart->id]);
+                return $cart;
+            }
+        }
+        
+        // Si no está autenticado o no tiene carrito, buscar por session_id
         $sessionId = $request->cookie('cart_session_id');
         
         if (!$sessionId) {
-            $sessionId = Str::uuid()->toString();
-            Log::info('Creando nuevo ID de sesión para el carrito: ' . $sessionId);
-        } else {
-            Log::info('Usando ID de sesión existente: ' . $sessionId);
+            $sessionId = (string) Str::uuid();
+            \Log::info('Generando nuevo session_id', ['session_id' => $sessionId]);
+            cookie()->queue('cart_session_id', $sessionId, 60 * 24 * 30); // 30 días
         }
         
-        // Buscar carrito existente
         $cart = Cart::where('session_id', $sessionId)->first();
-
+        
         // Si no existe, crear uno nuevo
         if (!$cart) {
             $cart = new Cart();
             $cart->session_id = $sessionId;
-            $cart->user_id = auth()->id();
-            $cart->total = 0;
+            
+            if (auth()->check()) {
+                $cart->user_id = auth()->id();
+            }
+            
             $cart->save();
-            Log::info('Carrito creado con ID: ' . $cart->id);
+            \Log::info('Nuevo carrito creado', ['cart_id' => $cart->id, 'session_id' => $sessionId]);
         } else {
-            Log::info('Carrito existente con ID: ' . $cart->id);
+            \Log::info('Carrito encontrado por session_id', ['cart_id' => $cart->id]);
         }
         
-        // Cargar los items del carrito con sus productos
+        return $cart;
+    }
+
+    /**
+     * Obtener el carrito actual
+     */
+    public function index(Request $request)
+    {
+        \Log::info('CartController@index - Request:', [
+            'user_id' => auth()->id(),
+            'session_id' => $request->cookie('cart_session_id'),
+            'headers' => $request->headers->all()
+        ]);
+        
+        // Obtener o crear el carrito
+        $cart = $this->getOrCreateCart($request);
+        
+        // Guardar el carrito para asegurarnos de que tenga un ID
+        if (!$cart->id) {
+            $cart->save();
+            \Log::info('Carrito guardado en index', ['cart_id' => $cart->id]);
+        }
+        
+        // Cargar los items con sus productos
         $items = CartItem::with('product')
             ->where('cart_id', $cart->id)
             ->get();
         
-        // Calcular el total del carrito
-        $total = $items->sum(function ($item) {
-            return $item->price * $item->quantity;
-        });
+        // Calcular el total
+        $total = 0;
+        foreach ($items as $item) {
+            $total += $item->quantity * $item->price;
+        }
         
         // Actualizar el total en el carrito
         $cart->total = $total;
         $cart->save();
         
-        // Establecer cookie de sesión
-        $cookie = cookie('cart_session_id', $sessionId, 60 * 24 * 30); // 30 días
-        
-        return response()->json([
+        // Establecer la cookie de sesión en la respuesta
+        $response = response()->json([
             'cart' => $cart,
             'items' => $items
-        ])->withCookie($cookie);
+        ]);
+        
+        if (!$request->cookie('cart_session_id')) {
+            $response->cookie('cart_session_id', $cart->session_id, 60 * 24 * 30);
+            \Log::info('Estableciendo cookie en respuesta', ['session_id' => $cart->session_id]);
+        }
+        
+        return $response;
     }
-    
+
     /**
-     * Add a product to the cart
+     * Añadir un producto al carrito
      */
-    public function addToCart(Request $request)
+    public function add(Request $request)
     {
+        \Log::info('CartController@add - Request:', [
+            'data' => $request->all(),
+            'user_id' => auth()->id(),
+            'session_id' => $request->cookie('cart_session_id')
+        ]);
+        
         $request->validate([
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|integer|min:1'
         ]);
         
-        // Obtener o crear un carrito
-        $sessionId = $request->cookie('cart_session_id');
+        // Obtener o crear el carrito
+        $cart = $this->getOrCreateCart($request);
         
-        if (!$sessionId) {
-            $sessionId = Str::uuid()->toString();
-            Log::info('Creando nuevo ID de sesión para añadir al carrito: ' . $sessionId);
-        } else {
-            Log::info('Usando ID de sesión existente para añadir al carrito: ' . $sessionId);
-        }
-        
-        // Buscar carrito existente
-        $cart = Cart::where('session_id', $sessionId)->first();
-
-        // Si no existe, crear uno nuevo
-        if (!$cart) {
-            $cart = new Cart();
-            $cart->session_id = $sessionId;
-            $cart->user_id = auth()->id();
-            $cart->total = 0;
+        // Guardar el carrito para asegurarnos de que tenga un ID
+        if (!$cart->id) {
             $cart->save();
-            Log::info('Carrito creado con ID: ' . $cart->id);
-        } else {
-            Log::info('Carrito existente con ID: ' . $cart->id);
+            \Log::info('Carrito guardado en add', ['cart_id' => $cart->id]);
         }
         
         // Obtener el producto
@@ -108,128 +145,146 @@ class CartController extends Controller
             ->first();
         
         if ($cartItem) {
-            // Actualizar cantidad si ya existe
+            // Actualizar la cantidad si ya existe
             $cartItem->quantity += $request->quantity;
             $cartItem->save();
-            Log::info('Actualizada cantidad de producto en carrito: ' . $product->id);
+            \Log::info('Item actualizado en carrito', ['item_id' => $cartItem->id, 'quantity' => $cartItem->quantity]);
         } else {
-            // Crear nuevo item si no existe
+            // Crear un nuevo item si no existe
             $cartItem = new CartItem();
             $cartItem->cart_id = $cart->id;
             $cartItem->product_id = $product->id;
             $cartItem->quantity = $request->quantity;
             $cartItem->price = $product->price;
             $cartItem->save();
-            Log::info('Añadido nuevo producto al carrito: ' . $product->id);
+            \Log::info('Nuevo item añadido al carrito', ['item_id' => $cartItem->id]);
         }
         
-        // Recalcular el total del carrito
-        $this->recalculateCart($cart->id);
+        // Recalcular el total
+        $total = CartItem::where('cart_id', $cart->id)
+            ->sum(\DB::raw('quantity * price'));
         
-        // Cargar el carrito actualizado con sus items
-        $cart = Cart::find($cart->id);
-        $items = CartItem::with('product')->where('cart_id', $cart->id)->get();
-        
-        // Establecer cookie de sesión
-        $cookie = cookie('cart_session_id', $sessionId, 60 * 24 * 30); // 30 días
-        
-        return response()->json([
-            'cart' => $cart,
-            'items' => $items
-        ])->withCookie($cookie);
-    }
-    
-    /**
-     * Update cart item quantity
-     */
-    public function updateCartItem(Request $request, $id)
-    {
-        $request->validate([
-            'quantity' => 'required|integer|min:1'
-        ]);
-        
-        $cartItem = CartItem::findOrFail($id);
-        $cartItem->quantity = $request->quantity;
-        $cartItem->save();
-        
-        // Recalcular el total del carrito
-        $cart = $this->recalculateCart($cartItem->cart_id);
-        
-        // Cargar los items del carrito
-        $items = CartItem::with('product')->where('cart_id', $cart->id)->get();
-        
-        return response()->json([
-            'cart' => $cart,
-            'items' => $items
-        ]);
-    }
-    
-    /**
-     * Remove an item from the cart
-     */
-    public function removeFromCart($id)
-    {
-        $cartItem = CartItem::findOrFail($id);
-        $cartId = $cartItem->cart_id;
-        $cartItem->delete();
-        
-        // Recalcular el total del carrito
-        $cart = $this->recalculateCart($cartId);
-        
-        // Cargar los items del carrito
-        $items = CartItem::with('product')->where('cart_id', $cart->id)->get();
-        
-        return response()->json([
-            'cart' => $cart,
-            'items' => $items
-        ]);
-    }
-    
-    /**
-     * Clear the cart
-     */
-    public function clearCart(Request $request)
-    {
-        $sessionId = $request->cookie('cart_session_id');
-        
-        if (!$sessionId) {
-            return response()->json(['error' => 'No hay un carrito activo'], 400);
-        }
-        
-        $cart = Cart::where('session_id', $sessionId)->first();
-        
-        if (!$cart) {
-            return response()->json(['error' => 'No se encontró el carrito'], 404);
-        }
-        
-        // Eliminar todos los items del carrito
-        CartItem::where('cart_id', $cart->id)->delete();
-        
-        // Actualizar el total del carrito
-        $cart->total = 0;
-        $cart->save();
-        
-        return response()->json([
-            'cart' => $cart,
-            'items' => []
-        ]);
-    }
-    
-    /**
-     * Recalculate cart total
-     */
-    private function recalculateCart($cartId)
-    {
-        $items = CartItem::where('cart_id', $cartId)->get();
-        
-        $total = $items->sum(function ($item) {
-            return $item->price * $item->quantity;
-        });
-        
-        $cart = Cart::find($cartId);
+        // Actualizar el total en el carrito
         $cart->total = $total;
         $cart->save();
         
-        return $cart;
+        // Cargar los items con sus productos
+        $items = CartItem::with('product')
+            ->where('cart_id', $cart->id)
+            ->get();
+        
+        // Establecer la cookie de sesión en la respuesta
+        $response = response()->json([
+            'cart' => $cart,
+            'items' => $items
+        ]);
+        
+        if (!$request->cookie('cart_session_id')) {
+            $response->cookie('cart_session_id', $cart->session_id, 60 * 24 * 30);
+            \Log::info('Estableciendo cookie en respuesta de add', ['session_id' => $cart->session_id]);
+        }
+        
+        return $response;
     }
+
+    /**
+     * Eliminar un producto del carrito
+     */
+    public function remove(Request $request)
+    {
+        $request->validate([
+            'product_id' => 'required|exists:products,id'
+        ]);
+        
+        // Obtener el carrito
+        $cart = $this->getOrCreateCart($request);
+        
+        // Eliminar el item
+        CartItem::where('cart_id', $cart->id)
+            ->where('product_id', $request->product_id)
+            ->delete();
+        
+        // Recalcular el total
+        $total = CartItem::where('cart_id', $cart->id)
+            ->sum(\DB::raw('quantity * price'));
+        
+        // Actualizar el total en el carrito
+        $cart->total = $total;
+        $cart->save();
+        
+        // Cargar los items con sus productos
+        $items = CartItem::with('product')
+            ->where('cart_id', $cart->id)
+            ->get();
+        
+        return response()->json([
+            'cart' => $cart,
+            'items' => $items
+        ]);
+    }
+
+    /**
+     * Actualizar la cantidad de un producto en el carrito
+     */
+    public function update(Request $request)
+    {
+        $request->validate([
+            'product_id' => 'required|exists:products,id',
+            'quantity' => 'required|integer|min:1'
+        ]);
+        
+        // Obtener el carrito
+        $cart = $this->getOrCreateCart($request);
+        
+        // Actualizar el item
+        $cartItem = CartItem::where('cart_id', $cart->id)
+            ->where('product_id', $request->product_id)
+            ->first();
+        
+        if ($cartItem) {
+            $cartItem->quantity = $request->quantity;
+            $cartItem->save();
+        }
+        
+        // Recalcular el total
+        $total = CartItem::where('cart_id', $cart->id)
+            ->sum(\DB::raw('quantity * price'));
+        
+        // Actualizar el total en el carrito
+        $cart->total = $total;
+        $cart->save();
+        
+        // Cargar los items con sus productos
+        $items = CartItem::with('product')
+            ->where('cart_id', $cart->id)
+            ->get();
+        
+        return response()->json([
+            'cart' => $cart,
+            'items' => $items
+        ]);
+    }
+
+/**
+ * Marcar el carrito como completado (sin eliminar registros)
+ */
+public function markAsCompleted(Request $request)
+{
+    // Obtener el carrito actual
+    $cart = $this->getOrCreateCart($request);
+    
+    // Crear un nuevo carrito para el usuario/sesión
+    $newCart = new Cart();
+    $newCart->user_id = auth()->id();
+    $newCart->session_id = $cart->session_id;
+    $newCart->total = 0;
+    $newCart->save();
+    
+    // Devolver el nuevo carrito vacío
+    return response()->json([
+        'cart' => $newCart,
+        'items' => []
+    ]);
 }
+}
+

@@ -1,6 +1,11 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\WebProductController;
+use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\CartController;
+use App\Http\Controllers\OrderController;
+
 
 
 
@@ -15,5 +20,7 @@ Route::get('/{any?}', function () {
 })->where('any', '.*');
 
 
-
+Route::get('/', function () {
+    return view('welcome');
+});
 

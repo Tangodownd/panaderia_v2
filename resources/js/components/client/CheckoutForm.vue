@@ -1,149 +1,133 @@
 <template>
   <div class="checkout-form">
-    <!-- Modal de Checkout -->
-    <div class="modal fade" id="checkoutModal" tabindex="-1" aria-labelledby="checkoutModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-lg">
-        <div class="modal-content bg-beige">
-          <div class="modal-header bg-brown text-white">
-            <h5 class="modal-title" id="checkoutModalLabel">Finalizar Compra</h5>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <form @submit.prevent="submitOrder">
-              <!-- Información de contacto -->
-              <div class="mb-4">
-                <h5 class="text-brown">Información de contacto</h5>
-                <div class="row g-3">
-                  <div class="col-md-6">
-                    <label for="name" class="form-label">Nombre completo</label>
-                    <input type="text" class="form-control border-brown" id="name" v-model="checkout.name" required>
-                  </div>
-                  <div class="col-md-6">
-                    <label for="email" class="form-label">Correo electrónico</label>
-                    <input type="email" class="form-control border-brown" id="email" v-model="checkout.email" required>
-                  </div>
-                  <div class="col-md-6">
-                    <label for="phone" class="form-label">Teléfono</label>
-                    <input type="tel" class="form-control border-brown" id="phone" v-model="checkout.phone" required>
-                  </div>
-                </div>
-              </div>
-              
-              <!-- Información de envío -->
-              <div class="mb-4">
-                <h5 class="text-brown">Información de envío</h5>
-                <div class="mb-3">
-                  <label for="shipping_address" class="form-label">Dirección de envío</label>
-                  <textarea class="form-control border-brown" id="shipping_address" v-model="checkout.shipping_address" rows="3" required></textarea>
-                </div>
-                <div class="mb-3">
-                  <label for="notes" class="form-label">Notas adicionales (opcional)</label>
-                  <textarea class="form-control border-brown" id="notes" v-model="checkout.notes" rows="2"></textarea>
-                </div>
-              </div>
-              
-              <!-- Método de pago -->
-              <div class="mb-4">
-                <h5 class="text-brown">Método de pago</h5>
-                <div class="form-check mb-2">
-                  <input class="form-check-input" type="radio" name="payment_method" id="payment_cash" value="cash" v-model="checkout.payment_method" checked>
-                  <label class="form-check-label" for="payment_cash">
-                    <i class="fas fa-money-bill-wave me-2"></i>Efectivo al recibir
-                  </label>
-                </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="radio" name="payment_method" id="payment_transfer" value="transfer" v-model="checkout.payment_method">
-                  <label class="form-check-label" for="payment_transfer">
-                    <i class="fas fa-university me-2"></i>Transferencia bancaria
-                  </label>
-                </div>
-              </div>
-              
-              <!-- Resumen del pedido -->
-              <div class="card bg-cream mb-4">
-                <div class="card-body">
-                  <h5 class="card-title text-brown">Resumen del pedido</h5>
-                  <div class="table-responsive">
-                    <table class="table table-sm">
-                      <thead class="table-light">
-                        <tr>
-                          <th>Producto</th>
-                          <th class="text-center">Cantidad</th>
-                          <th class="text-end">Precio</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="item in cart.items" :key="item.id">
-                          <td>{{ item.product.name || item.product.titulo }}</td>
-                          <td class="text-center">{{ item.quantity }}</td>
-                          <td class="text-end">{{ formatPrice(item.price * item.quantity) }}</td>
-                        </tr>
-                      </tbody>
-                      <tfoot>
-                        <tr>
-                          <th colspan="2" class="text-end">Total:</th>
-                          <th class="text-end">{{ formatPrice(cart.total) }}</th>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-              </div>
-              
-              <div class="d-grid gap-2">
-                <button type="submit" class="btn btn-brown" :disabled="isSubmitting">
-                  <span v-if="isSubmitting" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                  {{ isSubmitting ? 'Procesando...' : 'Confirmar Pedido' }}
-                </button>
-                <button type="button" class="btn btn-outline-brown" data-bs-dismiss="modal">Cancelar</button>
-              </div>
-            </form>
-          </div>
+    <!-- Modal personalizado de checkout -->
+    <div v-if="isCheckoutOpen" class="custom-modal-backdrop" @click="closeModal">
+      <div class="custom-modal-content bg-beige" @click.stop>
+        <div class="custom-modal-header bg-brown text-white">
+          <h5 class="modal-title">Finalizar Compra</h5>
+          <button type="button" class="btn-close btn-close-white" @click="closeModal" aria-label="Close"></button>
         </div>
-      </div>
-    </div>
-    
-    <!-- Modal de Confirmación de Pedido -->
-    <div class="modal fade" id="orderConfirmationModal" tabindex="-1" aria-labelledby="orderConfirmationModalLabel" aria-hidden="true">
-      <div class="modal-dialog">
-        <div class="modal-content bg-beige">
-          <div class="modal-header bg-success text-white">
-            <h5 class="modal-title" id="orderConfirmationModalLabel">¡Pedido Confirmado!</h5>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        <div class="custom-modal-body">
+          <div v-if="loading" class="text-center py-4">
+            <div class="spinner-border text-brown" role="status">
+              <span class="visually-hidden">Cargando...</span>
+            </div>
+            <p class="mt-2">Procesando tu pedido...</p>
           </div>
-          <div class="modal-body text-center">
-            <i class="fas fa-check-circle fa-5x text-success mb-3"></i>
-            <h4 class="text-brown">Gracias por tu compra</h4>
-            <p>Tu pedido ha sido recibido y está siendo procesado.</p>
-            <p class="fw-bold">Número de pedido: {{ orderNumber }}</p>
-            <p>Te hemos enviado un correo electrónico con los detalles de tu pedido.</p>
+          
+          <div v-else-if="orderCompleted" class="text-center py-4">
+            <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+            <h5 class="text-success">¡Pedido completado con éxito!</h5>
+            <p>Tu número de pedido es: <strong>{{ orderNumber }}</strong></p>
+            <p>Te hemos enviado un correo con los detalles de tu pedido.</p>
+            <button class="btn btn-brown mt-3" @click="closeModal">Continuar comprando</button>
           </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-brown" data-bs-dismiss="modal" @click="closeAndReset">Cerrar</button>
+          
+          <div v-else>
+            <div class="row">
+              <div class="col-md-6">
+                <h6 class="mb-3">Información de contacto</h6>
+                <div class="mb-3">
+                  <label for="name" class="form-label">Nombre completo</label>
+                  <input type="text" class="form-control" id="name" v-model="formData.name" required>
+                </div>
+                <div class="mb-3">
+                  <label for="email" class="form-label">Correo electrónico</label>
+                  <input type="email" class="form-control" id="email" v-model="formData.email" required>
+                </div>
+                <div class="mb-3">
+                  <label for="phone" class="form-label">Teléfono</label>
+                  <input type="tel" class="form-control" id="phone" v-model="formData.phone" required>
+                </div>
+                <div class="mb-3">
+                  <label for="shipping_address" class="form-label">Dirección de entrega</label>
+                  <textarea class="form-control" id="shipping_address" rows="3" v-model="formData.shipping_address" required></textarea>
+                </div>
+              </div>
+              
+              <div class="col-md-6">
+                <h6 class="mb-3">Resumen del pedido</h6>
+                <div class="list-group mb-3">
+                  <div v-for="item in cart.items" :key="item.id" class="list-group-item bg-cream d-flex justify-content-between align-items-center">
+                    <div>
+                      <span>{{ item.product.name }}</span>
+                      <small class="d-block text-muted">{{ item.quantity }} x ${{ item.price }}</small>
+                    </div>
+                    <span>${{ (item.quantity * item.price).toFixed(2) }}</span>
+                  </div>
+                </div>
+                
+                <div class="card bg-cream mb-3">
+                  <div class="card-body">
+                    <h6 class="card-title">Total</h6>
+                    <div class="d-flex justify-content-between fw-bold">
+                      <span>Total a pagar</span>
+                      <span>${{ cart.total.toFixed(2) }}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <h6 class="mb-3">Método de pago</h6>
+                <div class="mb-3">
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="payment_method" id="payment_cash" value="cash" v-model="formData.payment_method" checked>
+                    <label class="form-check-label" for="payment_cash">
+                      Efectivo
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="payment_method" id="payment_transfer" value="transfer" v-model="formData.payment_method">
+                    <label class="form-check-label" for="payment_transfer">
+                      Transferencia bancaria
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="payment_method" id="payment_card" value="card" v-model="formData.payment_method">
+                    <label class="form-check-label" for="payment_card">
+                      Tarjeta de crédito/débito
+                    </label>
+                  </div>
+                </div>
+                
+                <div class="mb-3">
+                  <label for="notes" class="form-label">Notas adicionales</label>
+                  <textarea class="form-control" id="notes" rows="2" v-model="formData.notes"></textarea>
+                </div>
+              </div>
+            </div>
+            
+            <div class="d-grid gap-2 mt-3">
+              <button @click="submitOrder" class="btn btn-brown" :disabled="loading">
+                <span v-if="loading">
+                  <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                  Procesando...
+                </span>
+                <span v-else>Confirmar pedido</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
-</template>
-
-<script>
-import { ref, watch } from 'vue';
-import axios from 'axios';
-
-export default {
+  </template>
+  
+  <script>
+  import { ref, computed, watch } from 'vue';
+  import axios from 'axios';
+  
+  export default {
   props: {
     cart: {
       type: Object,
-      required: true,
-      default: () => ({ items: [], total: 0 })
+      required: true
     }
   },
   
   emits: ['order-completed'],
   
   setup(props, { emit }) {
-    const checkout = ref({
+    const formData = ref({
       name: '',
       email: '',
       phone: '',
@@ -152,163 +136,207 @@ export default {
       notes: ''
     });
     
-    const isSubmitting = ref(false);
-    const orderNumber = ref(null);
-    
-    const formatPrice = (price) => {
-      return `$${parseFloat(price).toFixed(2)}`;
-    };
-    
-    const openCheckoutModal = () => {
-      console.log('Abriendo modal de checkout');
-      console.log('Datos del carrito:', props.cart);
-      
-      const modal = document.getElementById('checkoutModal');
-      if (modal && typeof bootstrap !== 'undefined') {
-        const bsModal = new bootstrap.Modal(modal);
-        bsModal.show();
-      } else {
-        console.error('No se pudo abrir el modal de checkout');
-      }
-    };
+    const loading = ref(false);
+    const orderCompleted = ref(false);
+    const orderNumber = ref('');
+    const isCheckoutOpen = ref(false);
     
     const submitOrder = async () => {
-      console.log('Iniciando proceso de checkout');
-      
-      if (!props.cart.items || props.cart.items.length === 0) {
-        console.error('El carrito está vacío');
-        alert('Tu carrito está vacío. Agrega productos antes de confirmar el pedido.');
-        return;
-      }
-      
-      isSubmitting.value = true;
-      console.log('Estado de envío:', isSubmitting.value);
-      
-      try {
-        // Preparar datos para la petición
-        const orderData = { 
-          ...checkout.value,
-          // Incluir los items del carrito para asegurar que se procesen correctamente
-          cart_items: props.cart.items.map(item => ({
-            product_id: item.product.id,
-            quantity: item.quantity,
-            price: item.price || item.product.price
-          }))
-        };
-        
-        console.log('Enviando datos de pedido:', orderData);
-        
-        // Obtener el token CSRF
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-        console.log('Token CSRF:', csrfToken);
-        
-        // Realizar la solicitud usando fetch para mayor compatibilidad
-        const response = await fetch('/api/orders', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-CSRF-TOKEN': csrfToken || '',
-            'X-Requested-With': 'XMLHttpRequest'
-          },
-          body: JSON.stringify(orderData),
-          credentials: 'same-origin'
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(`Error del servidor: ${response.status} - ${errorData.error || response.statusText}`);
-        }
-        
-        const data = await response.json();
-        console.log('Respuesta del servidor:', data);
-        
-        // Guardar número de pedido
-        orderNumber.value = data.order_number || 'ORD-' + Math.floor(Math.random() * 10000);
-        
-        // Mostrar confirmación
-        const checkoutModal = document.getElementById('checkoutModal');
-        if (checkoutModal && typeof bootstrap !== 'undefined') {
-          const modal = bootstrap.Modal.getInstance(checkoutModal);
-          if (modal) modal.hide();
-        }
-        
-        const confirmationModal = document.getElementById('orderConfirmationModal');
-        if (confirmationModal && typeof bootstrap !== 'undefined') {
-          const modal = new bootstrap.Modal(confirmationModal);
-          modal.show();
-        }
-        
-        // Notificar que la orden se completó
-        emit('order-completed');
-        
-      } catch (error) {
-        console.error('Error al procesar el pedido:', error);
-        alert('Ha ocurrido un error al procesar tu pedido: ' + error.message);
-      } finally {
-        isSubmitting.value = false;
-        console.log('Finalizado proceso de checkout, estado de envío:', isSubmitting.value);
-      }
-    };
+    loading.value = true;
     
-    const closeAndReset = () => {
-      // Limpiar el formulario
-      checkout.value = {
-        name: '',
-        email: '',
-        phone: '',
-        shipping_address: '',
-        payment_method: 'cash',
-        notes: ''
+    try {
+      console.log('Iniciando proceso de orden con datos:', formData.value);
+      console.log('Carrito actual:', props.cart);
+      
+      // Verificar que el carrito tenga items
+      if (!props.cart.items || props.cart.items.length === 0) {
+        throw new Error('El carrito está vacío');
+      }
+      
+      // Preparar los items del carrito para enviar al backend
+      const cartItems = props.cart.items.map(item => ({
+        product_id: item.product_id || (item.product && item.product.id),
+        quantity: item.quantity,
+        price: item.price
+      }));
+      
+      console.log('Items preparados para enviar:', cartItems);
+      
+      // Verificar que todos los campos requeridos estén completos
+      if (!formData.value.name || !formData.value.email || !formData.value.phone || !formData.value.shipping_address) {
+        throw new Error('Por favor completa todos los campos requeridos');
+      }
+      
+      // Configurar opciones de Axios para mejor depuración
+      const axiosConfig = {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
       };
       
-      // Notificar que la orden se completó para que se actualice el carrito
+      // Enviar la orden al backend
+      console.log('Enviando solicitud a /api/orders con datos:', {
+        ...formData.value,
+        cart_items: cartItems
+      });
+      
+      const response = await axios.post('/api/orders', {
+        ...formData.value,
+        cart_items: cartItems
+      }, axiosConfig);
+      
+      console.log('Respuesta del servidor:', response.data);
+      
+      // Marcar como completado
+      orderCompleted.value = true;
+      orderNumber.value = response.data.order_id || response.data.order_number || response.data.id || 'N/A';
+      
+      // Emitir evento para que el componente padre sepa que la orden se completó
       emit('order-completed');
+      
+      // Mostrar mensaje de éxito
+      alert('¡Pedido completado con éxito! Tu número de orden es: ' + orderNumber.value);
+    } catch (error) {
+      console.error('Error al procesar la orden:', error);
+      
+      // Mostrar información detallada del error
+      if (error.response) {
+        // El servidor respondió con un código de estado fuera del rango 2xx
+        console.error('Respuesta del servidor con error:', error.response.data);
+        console.error('Código de estado:', error.response.status);
+        console.error('Encabezados:', error.response.headers);
+        
+        let errorMessage = 'Error del servidor: ';
+        if (error.response.data && error.response.data.message) {
+          errorMessage += error.response.data.message;
+        } else {
+          errorMessage += 'Código ' + error.response.status;
+        }
+        
+        alert(errorMessage);
+      } else if (error.request) {
+        // La solicitud se realizó pero no se recibió respuesta
+        console.error('No se recibió respuesta del servidor:', error.request);
+        alert('No se pudo conectar con el servidor. Por favor, verifica tu conexión a internet.');
+      } else {
+        // Algo ocurrió al configurar la solicitud que desencadenó un error
+        console.error('Error de configuración de la solicitud:', error.message);
+        alert('Error al procesar tu pedido: ' + error.message);
+      }
+    } finally {
+      loading.value = false;
+    }
+  };
+    
+    const openCheckoutModal = () => {
+      isCheckoutOpen.value = true;
+    };
+    
+    const closeModal = () => {
+      // Si la orden se completó, resetear el formulario
+      if (orderCompleted.value) {
+        formData.value = {
+          name: '',
+          email: '',
+          phone: '',
+          shipping_address: '',
+          payment_method: 'cash',
+          notes: ''
+        };
+        
+        // Resetear el estado
+        orderCompleted.value = false;
+        orderNumber.value = '';
+      }
+      
+      // Cerrar el modal
+      isCheckoutOpen.value = false;
     };
     
     return {
-      checkout,
-      isSubmitting,
+      formData,
+      loading,
+      orderCompleted,
       orderNumber,
-      formatPrice,
-      openCheckoutModal,
+      isCheckoutOpen,
       submitOrder,
-      closeAndReset
+      openCheckoutModal,
+      closeModal
     };
+  },
+  
+  methods: {
+    openCheckoutModal() {
+      this.isCheckoutOpen = true;
+    }
   }
-};
-</script>
-
-<style scoped>
-.bg-beige {
-  background-color: #F5E6D3;
-}
-.bg-cream {
-  background-color: #FFF8E7;
-}
-.text-brown {
-  color: #8B4513;
-}
-.border-brown {
-  border-color: #8B4513;
-}
-.btn-brown {
-  background-color: #8B4513;
-  border-color: #8B4513;
-  color: #FFF8E7;
-}
-.btn-brown:hover {
-  background-color: #6B3E0A;
-  border-color: #6B3E0A;
-  color: #FFF8E7;
-}
-.btn-outline-brown {
-  color: #8B4513;
-  border-color: #8B4513;
-  background-color: transparent;
-}
-.btn-outline-brown:hover {
-  background-color: #8B4513;
-  color: #FFF8E7;
-}
-</style>
+  };
+  </script>
+  
+  <style scoped>
+  .custom-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1060; /* Mayor que el z-index del modal del carrito */
+  }
+  
+  .custom-modal-content {
+    width: 100%;
+    max-width: 800px;
+    border-radius: 5px;
+    overflow: hidden;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .custom-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+  }
+  
+  .custom-modal-body {
+    padding: 1rem;
+    overflow-y: auto;
+    flex-grow: 1;
+  }
+  
+  .bg-beige {
+    background-color: #F5E6D3;
+  }
+  .bg-cream {
+    background-color: #FFF8E7;
+  }
+  .text-brown {
+    color: #8B4513;
+  }
+  .border-brown {
+    border-color: #8B4513;
+  }
+  .btn-brown {
+    background-color: #8B4513;
+    border-color: #8B4513;
+    color: #FFF8E7;
+  }
+  .btn-brown:hover {
+    background-color: #6B3E0A;
+    border-color: #6B3E0A;
+    color: #FFF8E7;
+  }
+  .bg-brown {
+    background-color: #8B4513;
+  }
+  </style>
+  
+  

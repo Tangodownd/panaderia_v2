@@ -7,6 +7,8 @@
 require("./bootstrap")
 
 window.Vue = require("vue").default
+console.log('Vue cargado:', !!window.Vue);
+console.log('Versión de Vue:', window.Vue ? window.Vue.version : 'No disponible');
 
 /**
  * The following block of code may be used to automatically register your
@@ -21,6 +23,7 @@ window.Vue = require("vue").default
 
 Vue.component("client-app", require("./components/client/ClientApp.vue").default)
 Vue.component("admin-app", require("./components/admin/AdminApp.vue").default)
+Vue.component('shopping-cart', require('./components/client/ShoppingCart.vue').default);
 
 /**
  * Next, we will create a fresh Vue application instance and attach it to
@@ -43,3 +46,8 @@ document.addEventListener("DOMContentLoaded", () => {
   popoverTriggerList.map((popoverTriggerEl) => new bootstrap.Popover(popoverTriggerEl))
 })
 
+window.vueApp = app;
+
+
+
+// Registrar los componentes globalmente

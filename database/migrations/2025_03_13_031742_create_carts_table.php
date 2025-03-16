@@ -14,9 +14,9 @@ class CreateCartsTable extends Migration
     public function up()
     {
         Schema::create('carts', function (Blueprint $table) {
-            $table->id();
+            $table->id()->autoIncrement();
             $table->foreignId('user_id')->nullable()->constrained()->onDelete('cascade');
-            $table->string('session_id')->nullable();
+            $table->string('session_id')->nullable()->autoIncrement();
             $table->decimal('total', 10, 2)->default(0);
             $table->timestamps();
         });

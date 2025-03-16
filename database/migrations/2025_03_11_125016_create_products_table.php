@@ -22,6 +22,7 @@ class CreateProductsTable extends Migration
             $table->string('image')->nullable();
             $table->foreignId('category_id')->constrained();
             $table->timestamps();
+            $table->decimal('discount', 5, 2)->default(0);
         });
     }
 

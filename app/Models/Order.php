@@ -12,6 +12,7 @@ class Order extends Model
     protected $fillable = [
         'user_id',
         'session_id',
+        'order_number',
         'total',
         'status',
         'shipping_address',
@@ -38,3 +39,4 @@ class Order extends Model
         return $this->belongsTo(User::class);
     }
 }
+

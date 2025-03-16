@@ -6,8 +6,9 @@ use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
-class ProductController extends Controller
+class WebProductController extends Controller
 {
     /**
      * Display a listing of the resource.
@@ -16,6 +17,7 @@ class ProductController extends Controller
      */
     public function index()
     {
+        Log::info('WebProductController llamado: ' . __CLASS__);
         $products = Product::with('category')->get();
         return response()->json($products);
     }
@@ -59,6 +61,7 @@ class ProductController extends Controller
      */
     public function show($id)
     {
+        Log::info('WebProductController show llamado: ' . __CLASS__);
         $product = Product::with('category')->findOrFail($id);
         return response()->json($product);
     }

@@ -33,7 +33,7 @@
             </li>
           </ul>
           <div class="d-flex">
-            <shopping-cart-icon @checkout="openCheckout" />
+            <shopping-cart ref="shoppingCart" @checkout="openCheckout" />
           </div>
         </div>
       </div>
@@ -81,17 +81,17 @@
       ref="checkoutForm"
     />
   </div>
-  </template>
+</template>
   
-  <script>
-  import { ref, onMounted, watch } from 'vue';
-  import axios from 'axios';
-  import ShoppingCartIcon from './ShoppingCartIcon.vue';
-  import CheckoutForm from './CheckoutForm.vue';
-  
-  export default {
+<script>
+import { ref, onMounted } from 'vue';
+import axios from 'axios';
+import ShoppingCart from './ShoppingCart.vue';
+import CheckoutForm from './CheckoutForm.vue';
+
+export default {
   components: {
-    ShoppingCartIcon,
+    ShoppingCart,
     CheckoutForm
   },
   
@@ -102,6 +102,7 @@
       total: 0
     });
     const checkoutForm = ref(null);
+    const shoppingCart = ref(null);
     
     const fetchCategories = async () => {
       try {
@@ -125,16 +126,13 @@
     
     const addToCart = async ({ product, quantity }) => {
       try {
-        const response = await axios.post('/api/cart/add', {
-          product_id: product.id,
-          quantity: quantity
-        });
-        
-        cart.value = response.data.cart;
-        cart.value.items = response.data.items;
-        
-        // Mostrar notificación
-        showNotification('Producto añadido al carrito');
+        // Usar el método del componente ShoppingCart
+        if (shoppingCart.value) {
+          await shoppingCart.value.addToCart(product, quantity);
+          
+          // Actualizar el carrito local
+          await fetchCart();
+        }
       } catch (error) {
         console.error('Error al añadir producto al carrito:', error);
         showNotification('Error al añadir producto al carrito', 'danger');
@@ -144,17 +142,38 @@
     const resetCart = async () => {
       try {
         // Recargar el carrito después de completar la orden
-        // El backend ya habrá creado un nuevo carrito vacío
         await fetchCart();
+        
+        // Notificar al componente ShoppingCart
+        if (shoppingCart.value) {
+          shoppingCart.value.fetchCart();
+        }
+        
+        // Disparar evento para que otros componentes se actualicen
+        document.dispatchEvent(new Event('cart-updated'));
       } catch (error) {
         console.error('Error al resetear el carrito:', error);
       }
     };
     
     const openCheckout = () => {
-      if (checkoutForm.value) {
-        checkoutForm.value.openCheckoutModal();
-      }
+      // Asegurarse de que no haya backdrops residuales
+      const backdrops = document.querySelectorAll('.modal-backdrop');
+      backdrops.forEach(backdrop => {
+        backdrop.remove();
+      });
+      
+      // Asegurarse de que el body no tenga la clase modal-open
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+      
+      // Pequeño retraso para asegurar que todo esté limpio
+      setTimeout(() => {
+        if (checkoutForm.value) {
+          checkoutForm.value.openCheckoutModal();
+        }
+      }, 100);
     };
     
     const showNotification = (message, type = 'success') => {
@@ -192,6 +211,14 @@
       fetchCategories();
       fetchCart();
       
+      // Escuchar eventos de checkout
+      document.addEventListener('checkout', (event) => {
+        if (event.detail && event.detail.cart) {
+          cart.value = event.detail.cart;
+          openCheckout();
+        }
+      });
+      
       // Asegurarse de que bootstrap esté disponible
       if (typeof bootstrap === 'undefined') {
         const script = document.createElement('script');
@@ -207,50 +234,52 @@
       categories,
       cart,
       checkoutForm,
+      shoppingCart,
       addToCart,
       resetCart,
       openCheckout
     };
   }
-  };
-  </script>
+};
+</script>
   
-  <style>
-  body {
+<style>
+body {
   background-color: #F5E6D3;
   color: #4A3728;
-  }
-  .bg-beige {
+}
+.bg-beige {
   background-color: #F5E6D3;
-  }
-  .bg-cream {
+}
+.bg-cream {
   background-color: #FFF8E7;
-  }
-  .text-brown {
+}
+.text-brown {
   color: #8B4513 !important;
-  }
-  .border-brown {
+}
+.border-brown {
   border-color: #8B4513 !important;
-  }
-  .btn-brown {
+}
+.btn-brown {
   background-color: #8B4513;
   border-color: #8B4513;
   color: #FFF8E7;
-  }
-  .btn-brown:hover {
+}
+.btn-brown:hover {
   background-color: #6B3E0A;
   border-color: #6B3E0A;
   color: #FFF8E7;
-  }
-  .navbar-light .navbar-nav .nav-link {
+}
+.navbar-light .navbar-nav .nav-link {
   color: rgba(75, 55, 40, 0.8);
-  }
-  .navbar-light .navbar-nav .nav-link:hover,
-  .navbar-light .navbar-nav .nav-link.active {
+}
+.navbar-light .navbar-nav .nav-link:hover,
+.navbar-light .navbar-nav .nav-link.active {
   color: #8B4513;
-  }
-  :focus-visible {
+}
+:focus-visible {
   outline: 2px solid #8B4513 !important;
   outline-offset: 2px;
-  }
-  </style>
+}
+</style>
+

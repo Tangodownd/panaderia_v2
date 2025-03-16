@@ -8,26 +8,27 @@ use Illuminate\Database\Eloquent\Model;
 class Cart extends Model
 {
     use HasFactory;
-    
+
     protected $fillable = [
-        'session_id',
         'user_id',
-        'total'
+        'session_id',
+        'total',
     ];
-    
+
     /**
-     * Get the items for the cart.
+     * Obtener los items del carrito
      */
     public function items()
     {
         return $this->hasMany(CartItem::class);
     }
-    
+
     /**
-     * Get the user that owns the cart.
+     * Obtener el usuario del carrito
      */
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 }
+

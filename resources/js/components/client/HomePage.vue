@@ -312,7 +312,7 @@
               <h6 class="card-title text-brown">Resumen del pedido</h6>
               <div class="d-flex justify-content-between mb-2">
                 <span>Subtotal</span>
-                <span>{{ formatPrice(calculateSubtotal()) }}</span>
+                <span>{{ formatPrice(cart.total) }}</span>
               </div>
               <div class="d-flex justify-content-between mb-2">
                 <span>Descuento</span>
@@ -406,7 +406,7 @@
                   <div class="card-body">
                     <div class="d-flex justify-content-between mb-2">
                       <span>Subtotal</span>
-                      <span>{{ formatPrice(calculateSubtotal()) }}</span>
+                      <span>{{ formatPrice(cart.total) }}</span>
                     </div>
                     <div class="d-flex justify-content-between mb-2">
                       <span>Descuento</span>
@@ -431,7 +431,7 @@
         <div class="modal-content bg-beige">
           <div class="modal-header bg-success text-white">
             <h5 class="modal-title">¡Pedido Confirmado!</h5>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" @click="resetCart" aria-label="Close"></button>
           </div>
           <div class="modal-body text-center">
             <i class="fas fa-check-circle text-success fa-4x mb-3"></i>
@@ -471,6 +471,10 @@ export default {
       items: [],
       total: 0
     });
+
+
+    
+
 
     
     const checkout = ref({
@@ -638,103 +642,259 @@ export default {
     });
 
 // Funciones del carrito
-const addToCart = (product) => {
-  const existingItemIndex = cart.value.items.findIndex(item => item.product.id === product.id);
-  
-  if (existingItemIndex !== -1) {
-    cart.value.items[existingItemIndex].quantity += 1;
-  } else {
-    cart.value.items.push({
-      product: product,
+const addToCart = async (product) => {
+  try {
+    console.log('Añadiendo producto al carrito:', product.id);
+    const response = await axios.post('/api/cart/add', {
+      product_id: product.id,
       quantity: 1
     });
+    
+    if (response.data && response.data.cart) {
+      // Actualizar el carrito con los datos de la API
+      cart.value = response.data.cart;
+      cart.value.items = response.data.items || [];
+      
+      // Transformar los items para mantener la estructura esperada por el componente
+      cart.value.items = cart.value.items.map(item => ({
+        product: item.product,
+        quantity: item.quantity
+      }));
+    }
+    
+    // Mostrar notificación
+    showNotification('Producto añadido al carrito');
+    
+    // Emitir evento para actualizar otros componentes
+    document.dispatchEvent(new Event('cart-updated'));
+  } catch (error) {
+    console.error('Error al añadir producto al carrito:', error);
+    showNotification('Error al añadir producto al carrito');
   }
-  
-  // Guardar carrito en localStorage
-  saveCartToLocalStorage();
-  
-  // Mostrar notificación
-  showNotification('Producto añadido al carrito');
 };
 
-const addToCartWithQuantity = (product, qty) => {
-  const existingItemIndex = cart.value.items.findIndex(item => item.product.id === product.id);
-  
-  if (existingItemIndex !== -1) {
-    cart.value.items[existingItemIndex].quantity += parseInt(qty);
-  } else {
-    cart.value.items.push({
-      product: product,
+
+const addToCartWithQuantity = async (product, qty) => {
+  try {
+    console.log('Añadiendo producto al carrito:', product.id, qty);
+    const response = await axios.post('/api/cart/add', {
+      product_id: product.id,
       quantity: parseInt(qty)
     });
+    
+    if (response.data && response.data.cart) {
+      // Actualizar el carrito con los datos de la API
+      cart.value = response.data.cart;
+      cart.value.items = response.data.items || [];
+      
+      // Transformar los items para mantener la estructura esperada por el componente
+      cart.value.items = cart.value.items.map(item => ({
+        product: item.product,
+        quantity: item.quantity
+      }));
+    }
+    
+    // Cerrar modal y mostrar notificación
+    const modal = document.getElementById('productDetailModal');
+    if (modal && typeof bootstrap !== 'undefined') {
+      const modalInstance = bootstrap.Modal.getInstance(modal);
+      if (modalInstance) modalInstance.hide();
+    }
+    
+    // Mostrar notificación
+    showNotification('Producto añadido al carrito');
+    
+    // Emitir evento para actualizar otros componentes
+    document.dispatchEvent(new Event('cart-updated'));
+  } catch (error) {
+    console.error('Error al añadir producto al carrito:', error);
+    showNotification('Error al añadir producto al carrito');
   }
-  
-  // Guardar carrito en localStorage
-  saveCartToLocalStorage();
-  
-  // Cerrar modal y mostrar notificación
-  const modal = document.getElementById('productDetailModal');
-  if (modal && typeof bootstrap !== 'undefined') {
-    const modalInstance = bootstrap.Modal.getInstance(modal);
-    if (modalInstance) modalInstance.hide();
+};
+
+
+const removeFromCart = async (index) => {
+  try {
+    const item = cart.value.items[index];
+    const response = await axios.post('/api/cart/remove', {
+      product_id: item.product.id
+    });
+    
+    if (response.data && response.data.cart) {
+      // Actualizar el carrito con los datos de la API
+      cart.value = response.data.cart;
+      cart.value.items = response.data.items || [];
+      
+      // Transformar los items para mantener la estructura esperada por el componente
+      cart.value.items = cart.value.items.map(item => ({
+        product: item.product,
+        quantity: item.quantity
+      }));
+    }
+    
+    // Emitir evento para actualizar otros componentes
+    document.dispatchEvent(new Event('cart-updated'));
+  } catch (error) {
+    console.error('Error al eliminar producto del carrito:', error);
+    showNotification('Error al eliminar producto del carrito');
   }
-  
-  // Mostrar notificación
-  showNotification('Producto añadido al carrito');
 };
 
-const removeFromCart = (index) => {
-  cart.value.items.splice(index, 1);
-  saveCartToLocalStorage();
-};
-
-const updateCartItem = (index, quantity) => {
-  cart.value.items[index].quantity = parseInt(quantity);
-  if (cart.value.items[index].quantity < 1) {
-    cart.value.items[index].quantity = 1;
+const updateCartItem = async (index, quantity) => {
+  try {
+    const item = cart.value.items[index];
+    const newQuantity = parseInt(quantity);
+    
+    if (newQuantity < 1) {
+      return; // No permitir cantidades menores a 1
+    }
+    
+    const response = await axios.post('/api/cart/update', {
+      product_id: item.product.id,
+      quantity: newQuantity
+    });
+    
+    if (response.data && response.data.cart) {
+      // Actualizar el carrito con los datos de la API
+      cart.value = response.data.cart;
+      cart.value.items = response.data.items || [];
+      
+      // Transformar los items para mantener la estructura esperada por el componente
+      cart.value.items = cart.value.items.map(item => ({
+        product: item.product,
+        quantity: item.quantity
+      }));
+    }
+    
+    // Emitir evento para actualizar otros componentes
+    document.dispatchEvent(new Event('cart-updated'));
+  } catch (error) {
+    console.error('Error al actualizar item del carrito:', error);
+    showNotification('Error al actualizar item del carrito');
   }
-  saveCartToLocalStorage();
 };
 
-const incrementCartItem = (index) => {
-  cart.value.items[index].quantity = parseInt(cart.value.items[index].quantity) + 1;
-  saveCartToLocalStorage();
+const incrementCartItem = async (index) => {
+  try {
+    const item = cart.value.items[index];
+    const newQuantity = parseInt(item.quantity) + 1;
+    
+    const response = await axios.post('/api/cart/update', {
+      product_id: item.product.id,
+      quantity: newQuantity
+    });
+    
+    if (response.data && response.data.cart) {
+      // Actualizar el carrito con los datos de la API
+      cart.value = response.data.cart;
+      cart.value.items = response.data.items || [];
+      
+      // Transformar los items para mantener la estructura esperada por el componente
+      cart.value.items = cart.value.items.map(item => ({
+        product: item.product,
+        quantity: item.quantity
+      }));
+    }
+    
+    // Emitir evento para actualizar otros componentes
+    document.dispatchEvent(new Event('cart-updated'));
+  } catch (error) {
+    console.error('Error al incrementar item del carrito:', error);
+    showNotification('Error al actualizar item del carrito');
+  }
 };
 
-const decrementCartItem = (index) => {
-  if (cart.value.items[index].quantity > 1) {
-    cart.value.items[index].quantity = parseInt(cart.value.items[index].quantity) - 1;
-    saveCartToLocalStorage();
+const decrementCartItem = async (index) => {
+  try {
+    const item = cart.value.items[index];
+    if (item.quantity <= 1) {
+      return; // No permitir cantidades menores a 1
+    }
+    
+    const newQuantity = parseInt(item.quantity) - 1;
+    
+    const response = await axios.post('/api/cart/update', {
+      product_id: item.product.id,
+      quantity: newQuantity
+    });
+    
+    if (response.data && response.data.cart) {
+      // Actualizar el carrito con los datos de la API
+      cart.value = response.data.cart;
+      cart.value.items = response.data.items || [];
+      
+      // Transformar los items para mantener la estructura esperada por el componente
+      cart.value.items = cart.value.items.map(item => ({
+        product: item.product,
+        quantity: item.quantity
+      }));
+    }
+    
+    // Emitir evento para actualizar otros componentes
+    document.dispatchEvent(new Event('cart-updated'));
+  } catch (error) {
+    console.error('Error al decrementar item del carrito:', error);
+    showNotification('Error al actualizar item del carrito');
   }
 };
 
 const saveCartToLocalStorage = () => {
-  localStorage.setItem('panaderia-cart', JSON.stringify(cart.value));
 };
 
-const loadCartFromLocalStorage = () => {
-  const savedCart = localStorage.getItem('panaderia-cart');
-  if (savedCart) {
-    try {
-      cart.value = JSON.parse(savedCart);
-    } catch (e) {
-      console.error('Error al cargar el carrito desde localStorage:', e);
-      cart.value = { items: [], total: 0 };
+const loadCartFromLocalStorage = async () => {
+  try {
+    const response = await axios.get('/api/cart');
+    if (response.data && response.data.cart) {
+      // Actualizar el carrito con los datos de la API
+      cart.value = response.data.cart;
+      cart.value.items = response.data.items || [];
+      
+      // Transformar los items para mantener la estructura esperada por el componente
+      cart.value.items = cart.value.items.map(item => ({
+        product: item.product,
+        quantity: item.quantity
+      }));
     }
+  } catch (error) {
+    console.error('Error al cargar el carrito:', error);
+    cart.value = { items: [], total: 0 };
   }
 };
 
-const resetCart = () => {
-  cart.value = {
-    items: [],
-    total: 0
-  };
-  saveCartToLocalStorage();
-  
-  // Recargar los productos después de completar un pedido
-  setTimeout(() => {
-    fetchProducts();
-  }, 500);
+const resetCart = async () => {
+  try {
+    // Usar el nuevo endpoint que marca el carrito como completado
+    const response = await axios.post('/api/cart/mark-completed');
+    
+    if (response.data && response.data.cart) {
+      // Actualizar el carrito con los datos de la API
+      cart.value = response.data.cart;
+      cart.value.items = [];
+      cart.value.total = 0;
+    } else {
+      cart.value = { items: [], total: 0 };
+    }
+    
+    // Emitir evento para actualizar otros componentes
+    document.dispatchEvent(new Event('cart-updated'));
+    
+    // Recargar los productos después de completar un pedido
+    setTimeout(() => {
+      fetchProducts();
+    }, 500);
+  } catch (error) {
+    console.error('Error al vaciar el carrito:', error);
+    // En caso de error, vaciar el carrito localmente
+    cart.value = { items: [], total: 0 };
+    
+    // Emitir evento para actualizar otros componentes
+    document.dispatchEvent(new Event('cart-updated'));
+    
+    // Recargar los productos después de completar un pedido
+    setTimeout(() => {
+      fetchProducts();
+    }, 500);
+  }
 };
 
 const handleOrderCompleted = () => {
@@ -760,13 +920,16 @@ const handleOrderCompleted = () => {
     };
 
     const openCart = () => {
-      const offcanvas = document.getElementById('shoppingCart');
-      if (offcanvas && typeof bootstrap !== 'undefined') {
-        const offcanvasInstance = new bootstrap.Offcanvas(offcanvas);
-        offcanvasInstance.show();
-      }
-    };
-
+  // Primero intentamos abrir el offcanvas local
+  const offcanvas = document.getElementById('shoppingCart');
+  if (offcanvas && typeof bootstrap !== 'undefined') {
+    const offcanvasInstance = new bootstrap.Offcanvas(offcanvas);
+    offcanvasInstance.show();
+  }
+  
+  // También emitimos un evento global para que otros componentes puedan responder
+  document.dispatchEvent(new CustomEvent('open-main-cart'));
+};
     const proceedToCheckout = () => {
       const offcanvas = document.getElementById('shoppingCart');
       if (offcanvas && typeof bootstrap !== 'undefined') {
@@ -925,8 +1088,10 @@ const handleOrderCompleted = () => {
     onMounted(() => {
       fetchProducts();
       fetchCategories();
-      loadCartFromLocalStorage();
       
+      document.addEventListener('cart-updated', () => {
+    loadCartFromLocalStorage(); // Ahora usa la API en lugar de localStorage
+  });
       // Asegurarse de que bootstrap esté disponible
       if (typeof bootstrap === 'undefined') {
         const script = document.createElement('script');

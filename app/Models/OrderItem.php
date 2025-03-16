@@ -25,10 +25,11 @@ class OrderItem extends Model
     }
 
     /**
-     * Get the product that is in the order.
+     * Get the product that owns the item.
      */
     public function product()
     {
         return $this->belongsTo(Product::class);
     }
 }
+
