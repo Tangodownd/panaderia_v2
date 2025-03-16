@@ -22766,7 +22766,7 @@ function _toPrimitive(t, r) { if ("object" != typeof t || !t) return t; var e = 
       description: 'Deliciosos dulces para toda ocasión',
       icon: 'fas fa-birthday-cake'
     }, {
-      id: 4,
+      id: 3,
       name: 'Charcuteria',
       description: 'Los mejores  embutidos y quesos artesanales para tus mejores momentos.',
       icon: 'fas fa-cutlery'

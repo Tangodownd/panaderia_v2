@@ -305,7 +305,7 @@ export default {
     const featuredCategories = ref([
       { id: 1, name: 'Panes', description: 'Gran variedad de panes artesanales recién horneados', icon: 'fas fa-bread-slice' },
       { id: 2, name: 'Dulces', description: 'Deliciosos dulces para toda ocasión', icon: 'fas fa-birthday-cake' },
-      { id: 4, name: 'Charcuteria', description: 'Los mejores  embutidos y quesos artesanales para tus mejores momentos.', icon: 'fas fa-cutlery' }
+      { id: 3, name: 'Charcuteria', description: 'Los mejores  embutidos y quesos artesanales para tus mejores momentos.', icon: 'fas fa-cutlery' }
     ]);
 
     // Cargar productos y categorías
