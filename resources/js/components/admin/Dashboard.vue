@@ -5,7 +5,7 @@
       <div class="container-fluid">
         <a class="navbar-brand" href="#">
           <i class="fas fa-bread-slice me-2"></i>
-          Panadería El Buen Gusto - Admin
+          Panadería Orquidea de Oro - Admin
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarAdmin" aria-controls="navbarAdmin" aria-expanded="false" aria-label="Toggle navigation">
           <span class="navbar-toggler-icon"></span>

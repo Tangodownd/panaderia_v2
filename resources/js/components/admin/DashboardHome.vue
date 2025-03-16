@@ -3,7 +3,7 @@
       <div class="row">
         <div class="col-12 mb-4">
           <h1 class="text-brown">Panel de Administración</h1>
-          <p class="text-muted">Bienvenido al panel de administración de Panadería El Buen Gusto</p>
+          <p class="text-muted">Bienvenido al panel de administración de Panadería Orquidea de Oro</p>
         </div>
       </div>
   
@@ -217,7 +217,7 @@
           if (response.data && Array.isArray(response.data)) {
             recentProducts.value = response.data
               .filter(product => product && product.id)
-              .slice(0, 5)
+              .slice(0, 10)
               .map(product => ({
                 id: product.id,
                 titulo: product.name || 'Sin título',

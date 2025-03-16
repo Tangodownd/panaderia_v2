@@ -44,12 +44,6 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
           <h2 class="text-brown">Nuestros Productos</h2>
           <div class="d-flex gap-2">
-            <button @click="openCart" class="btn btn-brown position-relative">
-              <i class="fas fa-shopping-cart me-2"></i>Carrito
-              <span v-if="cartItemCount > 0" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-                {{ cartItemCount }}
-              </span>
-            </button>
           </div>
         </div>
 
@@ -260,192 +254,11 @@
       </div>
     </div>
 
-    <!-- Shopping Cart Offcanvas -->
-    <div class="offcanvas offcanvas-end" tabindex="-1" id="shoppingCart">
-      <div class="offcanvas-header bg-brown text-white">
-        <h5 class="offcanvas-title">Carrito de Compras</h5>
-        <button type="button" class="btn-close text-reset btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-      </div>
-      <div class="offcanvas-body">
-        <div v-if="cart.items.length === 0" class="text-center py-5">
-          <i class="fas fa-shopping-cart fa-3x text-muted mb-3"></i>
-          <h5 class="text-muted">Tu carrito está vacío</h5>
-          <p>Agrega algunos productos deliciosos</p>
-          <button class="btn btn-brown" data-bs-dismiss="offcanvas">Continuar comprando</button>
-        </div>
-        
-        <div v-else>
-          <div class="list-group mb-3">
-            <div v-for="(item, index) in cart.items" :key="index" class="list-group-item bg-beige border-brown">
-              <div class="d-flex">
-                <div class="flex-shrink-0">
-                  <img 
-                    :src="getProductImage(item.product)" 
-                    class="img-thumbnail" 
-                    :alt="item.product.titulo"
-                    style="width: 60px; height: 60px; object-fit: cover;"
-                    @error="handleImageError"
-                  >
-                </div>
-                <div class="flex-grow-1 ms-3">
-                  <div class="d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0 text-brown">{{ item.product.titulo }}</h6>
-                    <button @click="removeFromCart(index)" class="btn btn-sm text-danger">
-                      <i class="fas fa-trash"></i>
-                    </button>
-                  </div>
-                  <div class="d-flex justify-content-between align-items-center mt-2">
-                    <div class="input-group input-group-sm" style="width: 100px;">
-                      <button class="btn btn-outline-brown" type="button" @click="decrementCartItem(index)">-</button>
-                      <input type="number" class="form-control text-center" v-model="item.quantity" min="1" @change="updateCartItem(index, item.quantity)">
-                      <button class="btn btn-outline-brown" type="button" @click="incrementCartItem(index)">+</button>
-                    </div>
-                    <span class="text-brown fw-bold">{{ formatPrice(calculateItemTotal(item)) }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="card bg-cream mb-3">
-            <div class="card-body">
-              <h6 class="card-title text-brown">Resumen del pedido</h6>
-              <div class="d-flex justify-content-between mb-2">
-                <span>Subtotal</span>
-                <span>{{ formatPrice(cart.total) }}</span>
-              </div>
-              <div class="d-flex justify-content-between mb-2">
-                <span>Descuento</span>
-                <span>-{{ formatPrice(calculateDiscount()) }}</span>
-              </div>
-              <div class="d-flex justify-content-between fw-bold">
-                <span>Total</span>
-                <span>{{ formatPrice(calculateTotal()) }}</span>
-              </div>
-            </div>
-          </div>
-          
-          <div class="d-grid gap-2">
-            <button @click="proceedToCheckout" class="btn btn-brown">
-              Proceder al pago
-            </button>
-            <button class="btn btn-outline-brown" data-bs-dismiss="offcanvas">
-              Continuar comprando
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
 
-    <!-- Checkout Modal -->
-    <div class="modal fade" id="checkoutModal" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog modal-lg">
-        <div class="modal-content bg-beige">
-          <div class="modal-header bg-brown text-white">
-            <h5 class="modal-title">Finalizar Compra</h5>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <div class="row">
-              <div class="col-md-6">
-                <h5 class="text-brown mb-3">Información de Contacto</h5>
-                <form @submit.prevent="submitOrder">
-                  <div class="mb-3">
-                    <label for="name" class="form-label">Nombre completo</label>
-                    <input type="text" class="form-control border-brown" id="name" v-model="checkout.name" required>
-                  </div>
-                  <div class="mb-3">
-                    <label for="email" class="form-label">Correo electrónico</label>
-                    <input type="email" class="form-control border-brown" id="email" v-model="checkout.email" required>
-                  </div>
-                  <div class="mb-3">
-                    <label for="phone" class="form-label">Teléfono (WhatsApp)</label>
-                    <input type="tel" class="form-control border-brown" id="phone" v-model="checkout.phone" required>
-                  </div>
-                  <div class="mb-3">
-                    <label for="address" class="form-label">Dirección de entrega</label>
-                    <textarea class="form-control border-brown" id="address" rows="3" v-model="checkout.address" required></textarea>
-                  </div>
-                  <div class="mb-3">
-                    <label for="notes" class="form-label">Notas adicionales (opcional)</label>
-                    <textarea class="form-control border-brown" id="notes" rows="2" v-model="checkout.notes"></textarea>
-                  </div>
-                  <div class="mb-3">
-                    <label class="form-label">Método de pago</label>
-                    <div class="form-check">
-                      <input class="form-check-input" type="radio" name="paymentMethod" id="cashOnDelivery" value="cash" v-model="checkout.paymentMethod" checked>
-                      <label class="form-check-label" for="cashOnDelivery">
-                        Efectivo contra entrega
-                      </label>
-                    </div>
-                    <div class="form-check">
-                      <input class="form-check-input" type="radio" name="paymentMethod" id="transfer" value="transfer" v-model="checkout.paymentMethod">
-                      <label class="form-check-label" for="transfer">
-                        Transferencia bancaria
-                      </label>
-                    </div>
-                  </div>
-                  <button type="submit" class="btn btn-brown" :disabled="isSubmitting">
-                    <span v-if="isSubmitting" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                    {{ isSubmitting ? 'Procesando...' : 'Confirmar Pedido' }}
-                  </button>
-                </form>
-              </div>
-              <div class="col-md-6">
-                <h5 class="text-brown mb-3">Resumen del Pedido</h5>
-                <div class="list-group mb-3">
-                  <div v-for="(item, index) in cart.items" :key="index" class="list-group-item bg-cream border-brown d-flex justify-content-between align-items-center">
-                    <div>
-                      <span class="fw-bold">{{ item.quantity }}x</span> {{ item.product.titulo }}
-                    </div>
-                    <span>{{ formatPrice(calculateItemTotal(item)) }}</span>
-                  </div>
-                </div>
-                
-                <div class="card bg-cream mb-3">
-                  <div class="card-body">
-                    <div class="d-flex justify-content-between mb-2">
-                      <span>Subtotal</span>
-                      <span>{{ formatPrice(cart.total) }}</span>
-                    </div>
-                    <div class="d-flex justify-content-between mb-2">
-                      <span>Descuento</span>
-                      <span>-{{ formatPrice(calculateDiscount()) }}</span>
-                    </div>
-                    <div class="d-flex justify-content-between fw-bold">
-                      <span>Total</span>
-                      <span>{{ formatPrice(calculateTotal()) }}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
 
-    <!-- Order Confirmation Modal -->
-    <div class="modal fade" id="orderConfirmationModal" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog">
-        <div class="modal-content bg-beige">
-          <div class="modal-header bg-success text-white">
-            <h5 class="modal-title">¡Pedido Confirmado!</h5>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" @click="resetCart" aria-label="Close"></button>
-          </div>
-          <div class="modal-body text-center">
-            <i class="fas fa-check-circle text-success fa-4x mb-3"></i>
-            <h4 class="text-brown mb-3">Gracias por tu compra</h4>
-            <p>Tu pedido ha sido recibido y está siendo procesado.</p>
-            <p>Hemos enviado un mensaje de WhatsApp al número proporcionado con los detalles de tu pedido.</p>
-            <p class="mb-0"><strong>Número de pedido:</strong> {{ orderNumber }}</p>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-brown" data-bs-dismiss="modal" @click="resetCart">Continuar</button>
-          </div>
-        </div>
-      </div>
-    </div>
+ 
+
+
   </div>
 </template>
 
@@ -490,9 +303,9 @@ export default {
 
     // Categorías destacadas (simuladas)
     const featuredCategories = ref([
-      { id: 1, name: 'Panes', description: 'Panes artesanales recién horneados', icon: 'fas fa-bread-slice' },
-      { id: 2, name: 'Pasteles', description: 'Deliciosos pasteles para toda ocasión', icon: 'fas fa-birthday-cake' },
-      { id: 3, name: 'Galletas', description: 'Crujientes y dulces para acompañar el café', icon: 'fas fa-cookie' }
+      { id: 1, name: 'Panes', description: 'Gran variedad de panes artesanales recién horneados', icon: 'fas fa-bread-slice' },
+      { id: 2, name: 'Dulces', description: 'Deliciosos dulces para toda ocasión', icon: 'fas fa-birthday-cake' },
+      { id: 4, name: 'Charcuteria', description: 'Los mejores  embutidos y quesos artesanales para tus mejores momentos.', icon: 'fas fa-cutlery' }
     ]);
 
     // Cargar productos y categorías
