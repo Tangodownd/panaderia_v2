@@ -80,6 +80,7 @@ class OrderService
                 ]);
                 
                 // Actualizar stock
+                $product = Product::find($item['product_id']);
                 $product->decreaseStock($item['quantity']);
             }
             

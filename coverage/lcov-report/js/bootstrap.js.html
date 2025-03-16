@@ -25,28 +25,28 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/3</span>
+                <span class='fraction'>0/17</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/0</span>
+                <span class='fraction'>0/2</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/0</span>
+                <span class='fraction'>0/4</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/3</span>
+                <span class='fraction'>0/17</span>
             </div>
         
             
@@ -91,10 +91,41 @@
 <a name='L26'></a><a href='#L26'>26</a>
 <a name='L27'></a><a href='#L27'>27</a>
 <a name='L28'></a><a href='#L28'>28</a>
-<a name='L29'></a><a href='#L29'>29</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -102,51 +133,53 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" >window._ = require('lodash');</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">// Asegurarse de que Axios esté configurado correctamente para enviar cookies y CSRF tokens
+<span class="cstat-no" title="statement not covered" >window.axios = require("axios")</span>
+<span class="cstat-no" title="statement not covered" >window.axios.defaults.headers.common["X-Requested-With"] = "XMLHttpRequest"</span>
 &nbsp;
-/**
- * We'll load the axios HTTP library which allows us to easily issue requests
- * to our Laravel back-end. This library automatically handles sending the
- * CSRF token as a header based on the value of the "XSRF" token cookie.
- */
+// Configurar el token CSRF
+const token = <span class="cstat-no" title="statement not covered" >document.head.querySelector('meta[name="csrf-token"]')</span>
+<span class="cstat-no" title="statement not covered" >if (token) {</span>
+<span class="cstat-no" title="statement not covered" >  window.axios.defaults.headers.common["X-CSRF-TOKEN"] = token.content</span>
+} else {
+<span class="cstat-no" title="statement not covered" >  console.error("CSRF token not found: https://laravel.com/docs/csrf#csrf-x-csrf-token")</span>
+}
 &nbsp;
-<span class="cstat-no" title="statement not covered" >window.axios = require('axios');</span>
+// Configurar withCredentials para enviar cookies
+<span class="cstat-no" title="statement not covered" >window.axios.defaults.withCredentials = true</span>
 &nbsp;
-<span class="cstat-no" title="statement not covered" >window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';</span>
+// Añadir interceptor para depurar las solicitudes
+<span class="cstat-no" title="statement not covered" >window.axios.interceptors.request.use(</span>
+<span class="fstat-no" title="function not covered" >  (c</span>onfig) =&gt; {
+<span class="cstat-no" title="statement not covered" >    console.log("Axios Request:", config)</span>
+<span class="cstat-no" title="statement not covered" >    return config</span>
+  },
+<span class="fstat-no" title="function not covered" >  (e</span>rror) =&gt; {
+<span class="cstat-no" title="statement not covered" >    console.error("Axios Request Error:", error)</span>
+<span class="cstat-no" title="statement not covered" >    return Promise.reject(error)</span>
+  },
+)
 &nbsp;
-/**
- * Echo exposes an expressive API for subscribing to channels and listening
- * for events that are broadcast by Laravel. Echo and event broadcasting
- * allows your team to easily build robust real-time web applications.
- */
+// Añadir interceptor para depurar las respuestas
+<span class="cstat-no" title="statement not covered" >window.axios.interceptors.response.use(</span>
+<span class="fstat-no" title="function not covered" >  (r</span>esponse) =&gt; {
+<span class="cstat-no" title="statement not covered" >    console.log("Axios Response:", response)</span>
+<span class="cstat-no" title="statement not covered" >    return response</span>
+  },
+<span class="fstat-no" title="function not covered" >  (e</span>rror) =&gt; {
+<span class="cstat-no" title="statement not covered" >    console.error("Axios Response Error:", error)</span>
+<span class="cstat-no" title="statement not covered" >    return Promise.reject(error)</span>
+  },
+)
 &nbsp;
-// import Echo from 'laravel-echo';
-&nbsp;
-// window.Pusher = require('pusher-js');
-&nbsp;
-// window.Echo = new Echo({
-//     broadcaster: 'pusher',
-//     key: process.env.MIX_PUSHER_APP_KEY,
-//     cluster: process.env.MIX_PUSHER_APP_CLUSTER,
-//     forceTLS: true
-// });
 &nbsp;</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
@@ -154,7 +187,7 @@
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-03-11T14:49:10.903Z
+                at 2025-03-16T17:57:09.467Z
             </div>
         <script src="../prettify.js"></script>
         <script>

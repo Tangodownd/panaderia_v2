@@ -111,3 +111,6 @@ Route::post('/orders', [OrderController::class, 'store']);
 Route::get('/orders/user', [OrderController::class, 'getUserOrders']);
 Route::get('/orders/{id}', [OrderController::class, 'getOrderDetails']);
 
+// Asegúrate de tener ambas rutas
+
+Route::post('/cart/mark-as-completed', [CartController::class, 'markAsCompleted']);

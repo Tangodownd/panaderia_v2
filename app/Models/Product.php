@@ -43,5 +43,20 @@ class Product extends Model
                     ->withPivot('quantity', 'price')
                     ->withTimestamps();
     }
+
+    /**
+ * Decrease the product stock by the specified quantity
+ *
+ * @param int $quantity
+ * @return bool
+ */
+public function decreaseStock($quantity = 1)
+{
+    if ($this->stock >= $quantity) {
+        $this->stock -= $quantity;
+        return $this->save();
+    }
+    return false;
+}
 }
 
