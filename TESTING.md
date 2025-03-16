@@ -27,3 +27,6 @@ php artisan test --testsuite=Feature
 
 # Ejecutar todas las pruebas Frontend
 npm test
+
+# Ejecutar cypress
+npx cypress open
