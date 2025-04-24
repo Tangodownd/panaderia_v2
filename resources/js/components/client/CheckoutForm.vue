@@ -20,7 +20,14 @@
           <h5 class="text-success">¡Pedido completado con éxito!</h5>
           <p>Tu número de pedido es: <strong>{{ orderNumber }}</strong></p>
           <p>Tu pedido ha sido recibido y está siendo procesado.</p>
-          <p>Hemos enviado un mensaje de WhatsApp al número proporcionado con los detalles de tu pedido.</p>
+          <p v-if="whatsappSent" class="mt-2">
+            <i class="fab fa-whatsapp text-success"></i> 
+            Hemos enviado un mensaje de WhatsApp al número proporcionado con los detalles de tu pedido.
+          </p>
+          <p v-else class="mt-2 text-muted small">
+            <i class="fas fa-info-circle"></i>
+            Nota: Para recibir mensajes de WhatsApp, asegúrate de enviar primero "join [código]" al número de WhatsApp de Twilio.
+          </p>
           <button class="btn btn-brown mt-3" @click="closeModal">Continuar comprando</button>
         </div>
         
@@ -136,298 +143,303 @@
     </div>
   </div>
   </div>
-  </template>
+</template>
   
-  <script>
-  import { ref, computed, watch } from 'vue';
-  import axios from 'axios';
-  
-  export default {
+<script>
+import { ref, computed, watch } from 'vue';
+import axios from 'axios';
+
+export default {
   props: {
-  cart: {
-    type: Object,
-    required: true
-  }
+    cart: {
+      type: Object,
+      required: true
+    }
   },
   
   emits: ['order-completed'],
   
   setup(props, { emit }) {
-  const formData = ref({
-    name: '',
-    email: '',
-    phone: '',
-    shipping_address: '',
-    payment_method: 'cash',
-    notes: ''
-  });
-  
-  const loading = ref(false);
-  const orderCompleted = ref(false);
-  const orderNumber = ref('');
-  const isCheckoutOpen = ref(false);
-  const selectedCountryCode = ref('+58'); // Código de país por defecto (Venezuela)
-  const phoneNumber = ref(''); // Número de teléfono sin código de país
-  const validationErrors = ref({
-    name: '',
-    email: '',
-    phone: '',
-    shipping_address: ''
-  });
-  
-  // Actualizar el número de teléfono completo cuando cambie el código de país o el número
-  watch([selectedCountryCode, phoneNumber], () => {
-    formData.value.phone = selectedCountryCode.value + phoneNumber.value;
-  });
-  
-  // Validar el formato del correo electrónico
-  const validateEmail = () => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!formData.value.email) {
-      validationErrors.value.email = 'El correo electrónico es requerido';
-      return false;
-    } else if (!emailRegex.test(formData.value.email)) {
-      validationErrors.value.email = 'Ingresa un correo electrónico válido';
-      return false;
-    } else {
-      validationErrors.value.email = '';
-      return true;
-    }
-  };
-  
-  // Validar el número de teléfono según el país seleccionado
-  const validatePhone = () => {
-    // Permitir que se mantenga el 0 inicial para números venezolanos
-    // pero eliminar otros caracteres no numéricos
-    phoneNumber.value = phoneNumber.value.replace(/[^\d0]/g, '');
+    const formData = ref({
+      name: '',
+      email: '',
+      phone: '',
+      shipping_address: '',
+      payment_method: 'cash',
+      notes: ''
+    });
     
-    let isValid = false;
-    let errorMessage = '';
+    const loading = ref(false);
+    const orderCompleted = ref(false);
+    const orderNumber = ref('');
+    const isCheckoutOpen = ref(false);
+    const selectedCountryCode = ref('+58'); // Código de país por defecto (Venezuela)
+    const phoneNumber = ref(''); // Número de teléfono sin código de país
+    const whatsappSent = ref(false); // Añadido para controlar si se envió el mensaje de WhatsApp
+    const validationErrors = ref({
+      name: '',
+      email: '',
+      phone: '',
+      shipping_address: ''
+    });
     
-    // Validación específica según el código de país
-    if (selectedCountryCode.value === '+58') {
-      // Venezuela: 10 dígitos (sin 0 inicial) o 11 dígitos (con 0 inicial)
-      if (!phoneNumber.value) {
-        errorMessage = 'El número de teléfono es requerido';
-      } else if (phoneNumber.value.length === 10) {
-        // Número sin 0 inicial (ej: 4244423510)
-        isValid = true;
-      } else if (phoneNumber.value.length === 11 && phoneNumber.value.startsWith('0')) {
-        // Número con 0 inicial (ej: 04244423510)
-        isValid = true;
+    // Actualizar el número de teléfono completo cuando cambie el código de país o el número
+    watch([selectedCountryCode, phoneNumber], () => {
+      formData.value.phone = selectedCountryCode.value + phoneNumber.value;
+      console.log('Número de teléfono actualizado:', formData.value.phone);
+    });
+    
+    // Validar el formato del correo electrónico
+    const validateEmail = () => {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!formData.value.email) {
+        validationErrors.value.email = 'El correo electrónico es requerido';
+        return false;
+      } else if (!emailRegex.test(formData.value.email)) {
+        validationErrors.value.email = 'Ingresa un correo electrónico válido';
+        return false;
       } else {
-        errorMessage = 'El número debe tener 10 dígitos o 11 dígitos si comienza con 0';
-      }
-    } else if (selectedCountryCode.value === '+1') {
-      // Estados Unidos: 10 dígitos
-      if (!phoneNumber.value) {
-        errorMessage = 'El número de teléfono es requerido';
-      } else if (phoneNumber.value.length !== 10) {
-        errorMessage = 'El número debe tener 10 dígitos';
-      } else {
-        isValid = true;
-      }
-    } else {
-      // Validación genérica para otros países: entre 8 y 15 dígitos
-      if (!phoneNumber.value) {
-        errorMessage = 'El número de teléfono es requerido';
-      } else if (phoneNumber.value.length < 8 || phoneNumber.value.length > 15) {
-        errorMessage = 'El número debe tener entre 8 y 15 dígitos';
-      } else {
-        isValid = true;
-      }
-    }
-    
-    validationErrors.value.phone = errorMessage;
-    return isValid;
-  };
-  
-  // Validar todos los campos del formulario
-  const validateForm = () => {
-    let isValid = true;
-    
-    // Validar nombre
-    if (!formData.value.name) {
-      validationErrors.value.name = 'El nombre es requerido';
-      isValid = false;
-    } else {
-      validationErrors.value.name = '';
-    }
-    
-    // Validar email
-    if (!validateEmail()) {
-      isValid = false;
-    }
-    
-    // Validar teléfono
-    if (!validatePhone()) {
-      isValid = false;
-    }
-    
-    // Validar dirección
-    if (!formData.value.shipping_address) {
-      validationErrors.value.shipping_address = 'La dirección de entrega es requerida';
-      isValid = false;
-    } else {
-      validationErrors.value.shipping_address = '';
-    }
-    
-    return isValid;
-  };
-  
-  const submitOrder = async () => {
-  loading.value = true;
-  
-  try {
-    console.log('Iniciando proceso de orden con datos:', formData.value);
-    console.log('Carrito actual:', props.cart);
-    
-    // Verificar que el carrito tenga items
-    if (!props.cart.items || props.cart.items.length === 0) {
-      throw new Error('El carrito está vacío');
-    }
-    
-    // Validar el formulario antes de enviar
-    if (!validateForm()) {
-      throw new Error('Por favor corrige los errores en el formulario');
-    }
-    
-    // Preparar los items del carrito para enviar al backend
-    const cartItems = props.cart.items.map(item => ({
-      product_id: item.product_id || (item.product && item.product.id),
-      quantity: item.quantity,
-      price: item.price
-    }));
-    
-    console.log('Items preparados para enviar:', cartItems);
-    
-    // Configurar opciones de Axios para mejor depuración
-    const axiosConfig = {
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest'
+        validationErrors.value.email = '';
+        return true;
       }
     };
     
-    // Enviar la orden al backend
-    console.log('Enviando solicitud a /api/orders con datos:', {
-      ...formData.value,
-      cart_items: cartItems
-    });
-    
-    const response = await axios.post('/api/orders', {
-      ...formData.value,
-      cart_items: cartItems
-    }, axiosConfig);
-    
-    console.log('Respuesta del servidor:', response.data);
-    
-    // Marcar como completado
-    orderCompleted.value = true;
-    orderNumber.value = response.data.order_id || response.data.order_number || response.data.id || 'N/A';
-    
-    // Emitir evento para que el componente padre sepa que la orden se completó
-    emit('order-completed');
-    
-  } catch (error) {
-    console.error('Error al procesar la orden:', error);
-    
-    // Si es un error de validación local, no mostrar alerta
-    if (error.message === 'Por favor corrige los errores en el formulario') {
-      console.warn('Errores de validación en el formulario:', validationErrors.value);
-      loading.value = false;
-      return;
-    }
-    
-    // Mostrar información detallada del error
-    if (error.response) {
-      // El servidor respondió con un código de estado fuera del rango 2xx
-      console.error('Respuesta del servidor con error:', error.response.data);
-      console.error('Código de estado:', error.response.status);
-      console.error('Encabezados:', error.response.headers);
+    // Validar el número de teléfono según el país seleccionado
+    const validatePhone = () => {
+      // Permitir que se mantenga el 0 inicial para números venezolanos
+      // pero eliminar otros caracteres no numéricos
+      phoneNumber.value = phoneNumber.value.replace(/[^\d0]/g, '');
       
-      let errorMessage = 'Error del servidor: ';
-      if (error.response.data && error.response.data.message) {
-        errorMessage += error.response.data.message;
+      let isValid = false;
+      let errorMessage = '';
+      
+      // Validación específica según el código de país
+      if (selectedCountryCode.value === '+58') {
+        // Venezuela: 10 dígitos (sin 0 inicial) o 11 dígitos (con 0 inicial)
+        if (!phoneNumber.value) {
+          errorMessage = 'El número de teléfono es requerido';
+        } else if (phoneNumber.value.length === 10) {
+          // Número sin 0 inicial (ej: 4244423510)
+          isValid = true;
+        } else if (phoneNumber.value.length === 11 && phoneNumber.value.startsWith('0')) {
+          // Número con 0 inicial (ej: 04244423510)
+          isValid = true;
+        } else {
+          errorMessage = 'El número debe tener 10 dígitos o 11 dígitos si comienza con 0';
+        }
+      } else if (selectedCountryCode.value === '+1') {
+        // Estados Unidos: 10 dígitos
+        if (!phoneNumber.value) {
+          errorMessage = 'El número de teléfono es requerido';
+        } else if (phoneNumber.value.length !== 10) {
+          errorMessage = 'El número debe tener 10 dígitos';
+        } else {
+          isValid = true;
+        }
       } else {
-        errorMessage += 'Código ' + error.response.status;
+        // Validación genérica para otros países: entre 8 y 15 dígitos
+        if (!phoneNumber.value) {
+          errorMessage = 'El número de teléfono es requerido';
+        } else if (phoneNumber.value.length < 8 || phoneNumber.value.length > 15) {
+          errorMessage = 'El número debe tener entre 8 y 15 dígitos';
+        } else {
+          isValid = true;
+        }
       }
       
-      // Mostrar el error en el modal en lugar de una alerta
-      orderCompleted.value = false;
-      alert(errorMessage); // Mantener esta alerta para errores, pero podríamos mejorarla en el futuro
-    } else if (error.request) {
-      // La solicitud se realizó pero no se recibió respuesta
-      console.error('No se recibió respuesta del servidor:', error.request);
-      alert('No se pudo conectar con el servidor. Por favor, verifica tu conexión a internet.');
-    } else {
-      // Algo ocurrió al configurar la solicitud que desencadenó un error
-      console.error('Error de configuración de la solicitud:', error.message);
-      alert('Error al procesar tu pedido: ' + error.message);
-    }
-  } finally {
-    loading.value = false;
-  }
-  };
-  
-  const openCheckoutModal = () => {
-    isCheckoutOpen.value = true;
-  };
-  
-  const closeModal = () => {
-    // Si la orden se completó, resetear el formulario
-    if (orderCompleted.value) {
-      formData.value = {
-        name: '',
-        email: '',
-        phone: '',
-        shipping_address: '',
-        payment_method: 'cash',
-        notes: ''
-      };
-      
-      // Resetear el estado
-      orderCompleted.value = false;
-      orderNumber.value = '';
-      phoneNumber.value = '';
-      validationErrors.value = {
-        name: '',
-        email: '',
-        phone: '',
-        shipping_address: ''
-      };
-    }
+      validationErrors.value.phone = errorMessage;
+      return isValid;
+    };
     
-    // Cerrar el modal
-    isCheckoutOpen.value = false;
-  };
-  
-  return {
-    formData,
-    loading,
-    orderCompleted,
-    orderNumber,
-    isCheckoutOpen,
-    selectedCountryCode,
-    phoneNumber,
-    validationErrors,
-    validatePhone,
-    submitOrder,
-    openCheckoutModal,
-    closeModal
-  };
+    // Validar todos los campos del formulario
+    const validateForm = () => {
+      let isValid = true;
+      
+      // Validar nombre
+      if (!formData.value.name) {
+        validationErrors.value.name = 'El nombre es requerido';
+        isValid = false;
+      } else {
+        validationErrors.value.name = '';
+      }
+      
+      // Validar email
+      if (!validateEmail()) {
+        isValid = false;
+      }
+      
+      // Validar teléfono
+      if (!validatePhone()) {
+        isValid = false;
+      }
+      
+      // Validar dirección
+      if (!formData.value.shipping_address) {
+        validationErrors.value.shipping_address = 'La dirección de entrega es requerida';
+        isValid = false;
+      } else {
+        validationErrors.value.shipping_address = '';
+      }
+      
+      return isValid;
+    };
+    
+    const submitOrder = async () => {
+      loading.value = true;
+      
+      try {
+        console.log('Iniciando proceso de orden con datos:', formData.value);
+        console.log('Carrito actual:', props.cart);
+        
+        // Verificar que el carrito tenga items
+        if (!props.cart.items || props.cart.items.length === 0) {
+          throw new Error('El carrito está vacío');
+        }
+        
+        // Validar el formulario antes de enviar
+        if (!validateForm()) {
+          throw new Error('Por favor corrige los errores en el formulario');
+        }
+        
+        // Preparar los items del carrito para enviar al backend
+        const cartItems = props.cart.items.map(item => ({
+          product_id: item.product_id || (item.product && item.product.id),
+          quantity: item.quantity,
+          price: item.price
+        }));
+        
+        console.log('Items preparados para enviar:', cartItems);
+        
+        // Configurar opciones de Axios para mejor depuración
+        const axiosConfig = {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        };
+        
+        // Enviar la orden al backend
+        console.log('Enviando solicitud a /api/orders con datos:', {
+          ...formData.value,
+          cart_items: cartItems
+        });
+        
+        const response = await axios.post('/api/orders', {
+          ...formData.value,
+          cart_items: cartItems
+        }, axiosConfig);
+        
+        console.log('Respuesta del servidor:', response.data);
+        
+        // Marcar como completado
+        orderCompleted.value = true;
+        orderNumber.value = response.data.order_id || response.data.order_number || response.data.id || 'N/A';
+        whatsappSent.value = response.data.whatsapp_sent || false;
+        
+        // Emitir evento para que el componente padre sepa que la orden se completó
+        emit('order-completed');
+        
+      } catch (error) {
+        console.error('Error al procesar la orden:', error);
+        
+        // Si es un error de validación local, no mostrar alerta
+        if (error.message === 'Por favor corrige los errores en el formulario') {
+          console.warn('Errores de validación en el formulario:', validationErrors.value);
+          loading.value = false;
+          return;
+        }
+        
+        // Mostrar información detallada del error
+        if (error.response) {
+          // El servidor respondió con un código de estado fuera del rango 2xx
+          console.error('Respuesta del servidor con error:', error.response.data);
+          console.error('Código de estado:', error.response.status);
+          console.error('Encabezados:', error.response.headers);
+          
+          let errorMessage = 'Error del servidor: ';
+          if (error.response.data && error.response.data.message) {
+            errorMessage += error.response.data.message;
+          } else {
+            errorMessage += 'Código ' + error.response.status;
+          }
+          
+          // Mostrar el error en el modal en lugar de una alerta
+          orderCompleted.value = false;
+          alert(errorMessage); // Mantener esta alerta para errores, pero podríamos mejorarla en el futuro
+        } else if (error.request) {
+          // La solicitud se realizó pero no se recibió respuesta
+          console.error('No se recibió respuesta del servidor:', error.request);
+          alert('No se pudo conectar con el servidor. Por favor, verifica tu conexión a internet.');
+        } else {
+          // Algo ocurrió al configurar la solicitud que desencadenó un error
+          console.error('Error de configuración de la solicitud:', error.message);
+          alert('Error al procesar tu pedido: ' + error.message);
+        }
+      } finally {
+        loading.value = false;
+      }
+    };
+    
+    const openCheckoutModal = () => {
+      isCheckoutOpen.value = true;
+    };
+    
+    const closeModal = () => {
+      // Si la orden se completó, resetear el formulario
+      if (orderCompleted.value) {
+        formData.value = {
+          name: '',
+          email: '',
+          phone: '',
+          shipping_address: '',
+          payment_method: 'cash',
+          notes: ''
+        };
+        
+        // Resetear el estado
+        orderCompleted.value = false;
+        orderNumber.value = '';
+        phoneNumber.value = '';
+        whatsappSent.value = false;
+        validationErrors.value = {
+          name: '',
+          email: '',
+          phone: '',
+          shipping_address: ''
+        };
+      }
+      
+      // Cerrar el modal
+      isCheckoutOpen.value = false;
+    };
+    
+    return {
+      formData,
+      loading,
+      orderCompleted,
+      orderNumber,
+      isCheckoutOpen,
+      selectedCountryCode,
+      phoneNumber,
+      whatsappSent,
+      validationErrors,
+      validatePhone,
+      submitOrder,
+      openCheckoutModal,
+      closeModal
+    };
   },
   
   methods: {
-  openCheckoutModal() {
-    this.isCheckoutOpen = true;
+    openCheckoutModal() {
+      this.isCheckoutOpen = true;
+    }
   }
-  }
-  };
-  </script>
+};
+</script>
   
-  <style scoped>
-  .custom-modal-backdrop {
+<style scoped>
+.custom-modal-backdrop {
   position: fixed;
   top: 0;
   left: 0;
@@ -438,9 +450,9 @@
   justify-content: center;
   align-items: center;
   z-index: 1060; /* Mayor que el z-index del modal del carrito */
-  }
+}
   
-  .custom-modal-content {
+.custom-modal-content {
   width: 100%;
   max-width: 800px;
   border-radius: 5px;
@@ -449,51 +461,50 @@
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  }
+}
   
-  .custom-modal-header {
+.custom-modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 1rem;
-  }
+}
   
-  .custom-modal-body {
+.custom-modal-body {
   padding: 1rem;
   overflow-y: auto;
   flex-grow: 1;
-  }
+}
   
-  .bg-beige {
+.bg-beige {
   background-color: #F5E6D3;
-  }
-  .bg-cream {
+}
+.bg-cream {
   background-color: #FFF8E7;
-  }
-  .text-brown {
+}
+.text-brown {
   color: #8B4513;
-  }
-  .border-brown {
+}
+.border-brown {
   border-color: #8B4513;
-  }
-  .btn-brown {
+}
+.btn-brown {
   background-color: #8B4513;
   border-color: #8B4513;
   color: #FFF8E7;
-  }
-  .btn-brown:hover {
+}
+.btn-brown:hover {
   background-color: #6B3E0A;
   border-color: #6B3E0A;
   color: #FFF8E7;
-  }
-  .bg-brown {
+}
+.bg-brown {
   background-color: #8B4513;
-  }
+}
   
-  .text-danger {
+.text-danger {
   color: #dc3545;
   font-size: 0.875rem;
-  }
-  </style>
-  
-  
+}
+</style>
+

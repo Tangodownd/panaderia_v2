@@ -22678,8 +22678,6 @@ __webpack_require__.r(__webpack_exports__);
     const fetchStats = async () => {
       loading.stats = true;
       try {
-        // En un entorno real, esto sería una llamada a la API
-        // Por ahora, simulamos datos
         const response = await axios__WEBPACK_IMPORTED_MODULE_1___default().get('/api/admin/stats');
         Object.assign(stats, response.data);
       } catch (error) {
@@ -22719,41 +22717,19 @@ __webpack_require__.r(__webpack_exports__);
     const fetchRecentOrders = async () => {
       loading.orders = true;
       try {
-        // En un entorno real, esto sería una llamada a la API
-        // Por ahora, simulamos datos
         const response = await axios__WEBPACK_IMPORTED_MODULE_1___default().get('/api/admin/orders/recent');
 
         // Check if the response data is valid and contains actual orders
-        if (response.data && Array.isArray(response.data) && response.data.length > 0) {
-          // Filter out any invalid orders and limit to 5
-          recentOrders.value = response.data.filter(order => order && order.id && order.orderNumber).slice(0, 5);
+        if (response.data && Array.isArray(response.data)) {
+          // Use the data directly from the API
+          recentOrders.value = response.data;
         } else {
           // If no valid orders, set to empty array
           recentOrders.value = [];
         }
       } catch (error) {
         console.error('Error fetching recent orders:', error);
-        // Datos de ejemplo para demostración - solo si estamos en desarrollo
-        if (true) {
-          recentOrders.value = [{
-            id: 1,
-            orderNumber: 'ORD-1234',
-            date: new Date().toISOString(),
-            customer: {
-              name: 'Juan Pérez'
-            },
-            status: 'pending'
-          }, {
-            id: 2,
-            orderNumber: 'ORD-1235',
-            date: new Date(Date.now() - 86400000).toISOString(),
-            // Ayer
-            customer: {
-              name: 'María López'
-            },
-            status: 'completed'
-          }];
-        } else {}
+        recentOrders.value = [];
       } finally {
         loading.orders = false;
       }
@@ -25252,7 +25228,7 @@ __webpack_require__.r(__webpack_exports__);
 
 var ___CSS_LOADER_EXPORT___ = _node_modules_laravel_mix_node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_0___default()(function(i){return i[1]});
 // Module
-___CSS_LOADER_EXPORT___.push([module.id, "\n.bg-light-brown[data-v-6f4ec190] {\r\n    background-color: #A67C52;\n}\n.text-brown[data-v-6f4ec190] {\r\n    color: #8B4513;\n}\n.border-brown[data-v-6f4ec190] {\r\n    border-color: #8B4513;\n}\n.btn-outline-brown[data-v-6f4ec190] {\r\n    color: #8B4513;\r\n    border-color: #8B4513;\n}\n.btn-outline-brown[data-v-6f4ec190]:hover {\r\n    background-color: #8B4513;\r\n    color: #FFF8E7;\n}\n.bg-brown[data-v-6f4ec190] {\r\n    background-color: #8B4513;\n}\r\n  ", ""]);
+___CSS_LOADER_EXPORT___.push([module.id, "\n.bg-light-brown[data-v-6f4ec190] {\r\n  background-color: #A67C52;\n}\n.text-brown[data-v-6f4ec190] {\r\n  color: #8B4513;\n}\n.border-brown[data-v-6f4ec190] {\r\n  border-color: #8B4513;\n}\n.btn-outline-brown[data-v-6f4ec190] {\r\n  color: #8B4513;\r\n  border-color: #8B4513;\n}\n.btn-outline-brown[data-v-6f4ec190]:hover {\r\n  background-color: #8B4513;\r\n  color: #FFF8E7;\n}\n.bg-brown[data-v-6f4ec190] {\r\n  background-color: #8B4513;\n}\r\n", ""]);
 // Exports
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (___CSS_LOADER_EXPORT___);
 

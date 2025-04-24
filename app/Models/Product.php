@@ -34,9 +34,6 @@ class Product extends Model
         return $this->belongsTo(Category::class);
     }
 
-    /**
-     * Get the carts that contain this product.
-     */
     public function carts()
     {
         return $this->belongsToMany(Cart::class, 'cart_items')
@@ -45,18 +42,49 @@ class Product extends Model
     }
 
     /**
- * Decrease the product stock by the specified quantity
- *
- * @param int $quantity
- * @return bool
- */
-public function decreaseStock($quantity = 1)
-{
-    if ($this->stock >= $quantity) {
-        $this->stock -= $quantity;
-        return $this->save();
+     * Decrease the product stock by the specified quantity
+     *
+     * @param int $quantity
+     * @return bool
+     */
+    public function decreaseStock($quantity = 1)
+    {
+        if ($this->stock >= $quantity) {
+            $this->stock -= $quantity;
+            return $this->save();
+        }
+        return false;
     }
-    return false;
-}
-}
+    
+    /**
+     * Verificar si el producto tiene stock disponible
+     *
+     * @return bool
+     */
+    public function hasStock()
+    {
+        return $this->stock > 0;
+    }
 
+    /**
+     * Verificar si hay suficiente stock para una cantidad dada
+     *
+     * @param  int  $quantity
+     * @return bool
+     */
+    public function hasStockFor($quantity)
+    {
+        return $this->stock >= $quantity;
+    }
+
+    /**
+     * Scope para filtrar productos con stock
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeInStock($query)
+    {
+        return $query->where('stock', '>', 0);
+    }
+}

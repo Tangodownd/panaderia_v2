@@ -15,11 +15,44 @@ class ProductController extends Controller
         $this->middleware('admin')->only(['store', 'update', 'destroy']);
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $products = Product::with('category')->get();
+        // Obtener parámetros de consulta
+        $showOutOfStock = $request->query('show_out_of_stock', false);
+        $categoryId = $request->query('category_id');
+        $search = $request->query('search');
         
-        return response()->json(['data' => $products]);
+        // Iniciar la consulta
+        $query = Product::with('category');
+        
+        // Filtrar por categoría si se proporciona
+        if ($categoryId) {
+            $query->where('category_id', $categoryId);
+        }
+        
+        // Filtrar por término de búsqueda si se proporciona
+        if ($search) {
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%");
+            });
+        }
+        
+        // Filtrar productos sin stock a menos que se solicite mostrarlos
+        // Solo para clientes, no para el panel de administración
+        if (!$showOutOfStock && !$request->is('api/admin/*')) {
+            $query->where('stock', '>', 0);
+        }
+        
+        $products = $query->get();
+        
+        // Agregar información de stock a cada producto
+        $productsWithStockInfo = $products->map(function($product) {
+            $product->has_stock = $product->stock > 0;
+            return $product;
+        });
+        
+        return response()->json(['data' => $productsWithStockInfo]);
     }
 
     public function show($id)
@@ -29,6 +62,9 @@ class ProductController extends Controller
         if (!$product) {
             return response()->json(['message' => 'Producto no encontrado'], 404);
         }
+        
+        // Agregar información de stock
+        $product->has_stock = $product->stock > 0;
         
         return response()->json(['data' => $product]);
     }

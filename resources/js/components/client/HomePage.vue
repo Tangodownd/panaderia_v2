@@ -316,17 +316,30 @@ export default {
     products.value = response.data;
     
     // Asegurarse de que todos los productos tengan valores por defecto
-    products.value = products.value.map(product => ({
-      ...product,
-      availabilityStatus: product.availabilityStatus || 'In Stock',
-      valoracion: product.rating || 0,
-      descuento: product.discount || 0,
-      precio: product.price,
-      titulo: product.name,
-      contenido: product.description,
-      thumbnail: product.image, // Usar image como thumbnail
-      image: product.image      // Asegurarse de que image esté disponible
-    }));
+    // y que el estado de disponibilidad refleje el stock real
+    products.value = products.value.map(product => {
+      // Determinar el estado de disponibilidad basado en el stock
+      let availabilityStatus;
+      if (product.stock <= 0) {
+        availabilityStatus = 'Out of Stock';
+      } else if (product.stock < 5) { // Puedes ajustar este valor según tus necesidades
+        availabilityStatus = 'Low Stock';
+      } else {
+        availabilityStatus = 'In Stock';
+      }
+      
+      return {
+        ...product,
+        availabilityStatus: availabilityStatus,
+        valoracion: product.rating || 0,
+        descuento: product.discount || 0,
+        precio: product.price,
+        titulo: product.name,
+        contenido: product.description,
+        thumbnail: product.image, // Usar image como thumbnail
+        image: product.image      // Asegurarse de que image esté disponible
+      };
+    });
   } catch (error) {
     console.error('Error al cargar productos:', error);
     products.value = [];
@@ -481,8 +494,23 @@ const addToCart = async (product) => {
     // Emitir evento para actualizar otros componentes
     document.dispatchEvent(new Event('cart-updated'));
   } catch (error) {
-    console.error('Error al añadir producto al carrito:', error);
-    showNotification('Error al añadir producto al carrito');
+    console.log('Axios Response Error:', error);
+    
+    // Mostrar el mensaje específico del backend
+    if (error.response && error.response.data) {
+  console.log('Error response data:', error.response.data);
+  if (error.response.data.message) {
+    showNotification(error.response.data.message, true);
+  } else if (error.response.data.error) {
+    showNotification(error.response.data.error, true);
+  } else if (typeof error.response.data === 'string') {
+    showNotification(error.response.data, true);
+  } else {
+    showNotification('Error al añadir producto al carrito', true);
+  }
+} else {
+  showNotification('Error al añadir producto al carrito', true);
+}
   }
 };
 
@@ -514,14 +542,29 @@ const addToCartWithQuantity = async (product, qty) => {
       if (modalInstance) modalInstance.hide();
     }
     
-    // Mostrar notificación
+    // Mostrar notificación de éxito
     showNotification('Producto añadido al carrito');
     
     // Emitir evento para actualizar otros componentes
     document.dispatchEvent(new Event('cart-updated'));
   } catch (error) {
-    console.error('Error al añadir producto al carrito:', error);
-    showNotification('Error al añadir producto al carrito');
+    console.log('Axios Response Error:', error);
+    
+    // Mostrar el mensaje específico del backend
+    if (error.response && error.response.data) {
+      console.log('Error response data:', error.response.data);
+      if (error.response.data.message) {
+        showNotification(error.response.data.message, true);
+      } else if (error.response.data.error) {
+        showNotification(error.response.data.error, true);
+      } else if (typeof error.response.data === 'string') {
+        showNotification(error.response.data, true);
+      } else {
+        showNotification('Error al añadir producto al carrito', true);
+      }
+    } else {
+      showNotification('Error al añadir producto al carrito', true);
+    }
   }
 };
 
@@ -776,12 +819,16 @@ const handleOrderCompleted = () => {
     }
       }, 100);
     };
-    const showNotification = (message) => {
+    const showNotification = (message, isError = false) => {
   // Crear un elemento de notificación con ID único
   const toastId = 'toast-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
   const notification = document.createElement('div');
   notification.id = toastId;
-  notification.className = 'toast align-items-center text-white bg-success border-0 position-fixed bottom-0 end-0 m-3';
+  
+  // Usar clase de error si es un mensaje de error
+  const bgClass = isError ? 'bg-danger' : 'bg-success';
+  
+  notification.className = `toast align-items-center text-white ${bgClass} border-0 position-fixed bottom-0 end-0 m-3`;
   notification.setAttribute('role', 'alert');
   notification.setAttribute('aria-live', 'assertive');
   notification.setAttribute('aria-atomic', 'true');

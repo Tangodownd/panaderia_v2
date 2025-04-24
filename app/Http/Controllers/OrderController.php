@@ -6,8 +6,10 @@ use App\Models\CartItem;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Cart;
+use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Twilio\Rest\Client;
 
 class OrderController extends Controller
 {
@@ -49,6 +51,168 @@ class OrderController extends Controller
   }
 
   /**
+   * Enviar mensaje de WhatsApp personalizado con Twilio
+   *
+   * @param  string  $to
+   * @param  string  $message
+   * @return string|null
+   */
+  private function sendWhatsAppMessage($to, $message)
+  {
+      try {
+          // Obtener credenciales de Twilio desde variables de entorno
+          $sid = env('TWILIO_SID');
+          $token = env('TWILIO_AUTH_TOKEN');
+          
+          \Log::info('Intentando enviar mensaje de WhatsApp personalizado', [
+              'numero_original' => $to,
+              'mensaje' => $message
+          ]);
+          
+          // Verificar que tenemos las credenciales
+          if (!$sid || !$token) {
+              \Log::warning('Credenciales de Twilio no configuradas correctamente');
+              return null;
+          }
+          
+          // Configurar opciones de cURL para deshabilitar la verificación SSL
+          $curlOptions = [
+              CURLOPT_SSL_VERIFYHOST => 0,
+              CURLOPT_SSL_VERIFYPEER => 0
+          ];
+          
+          // Inicializar cliente de Twilio con las opciones personalizadas
+          $client = new Client($sid, $token, null, null, new \Twilio\Http\CurlClient($curlOptions));
+          
+          // Formatear el número de teléfono para WhatsApp
+          $formattedNumber = preg_replace('/[^0-9]/', '', $to);
+          
+          // Si el número comienza con 0, eliminarlo
+          if (strlen($formattedNumber) > 10 && substr($formattedNumber, 0, 1) === '0') {
+              $formattedNumber = substr($formattedNumber, 1);
+          }
+          
+          // Formatear el número para WhatsApp
+          $whatsappTo = 'whatsapp:+' . $formattedNumber;
+          
+          \Log::info('Enviando mensaje de WhatsApp personalizado', [
+              'to' => $whatsappTo,
+              'message' => $message
+          ]);
+          
+          // Enviar el mensaje con texto personalizado
+          $messageResponse = $client->messages->create(
+              $whatsappTo,
+              [
+                  'from' => 'whatsapp:+14155238886',
+                  'body' => $message
+              ]
+          );
+          
+          \Log::info('Mensaje de WhatsApp enviado exitosamente', [
+              'to' => $whatsappTo,
+              'message_sid' => $messageResponse->sid,
+              'status' => $messageResponse->status
+          ]);
+          
+          return $messageResponse->sid;
+      } catch (\Exception $e) {
+          \Log::error('Error al enviar mensaje de WhatsApp: ' . $e->getMessage(), [
+              'error_code' => $e->getCode(),
+              'error_line' => $e->getLine(),
+              'error_file' => $e->getFile()
+          ]);
+          return null;
+      }
+  }
+
+  /**
+   * Enviar mensaje de WhatsApp con Twilio usando plantilla
+   *
+   * @param  string  $to
+   * @return string|null
+   */
+  private function sendWhatsAppTemplate($to)
+  {
+      try {
+          // Obtener credenciales de Twilio desde variables de entorno
+          $sid = env('TWILIO_SID');
+          $token = env('TWILIO_AUTH_TOKEN');
+          
+          \Log::info('Intentando enviar mensaje de WhatsApp con plantilla', [
+              'numero_original' => $to
+          ]);
+          
+          // Verificar que tenemos las credenciales
+          if (!$sid || !$token) {
+              \Log::warning('Credenciales de Twilio no configuradas correctamente');
+              return null;
+          }
+          
+          // Configurar opciones de cURL para deshabilitar la verificación SSL
+          $curlOptions = [
+              CURLOPT_SSL_VERIFYHOST => 0,
+              CURLOPT_SSL_VERIFYPEER => 0
+          ];
+          
+          // Inicializar cliente de Twilio con las opciones personalizadas
+          $client = new Client($sid, $token, null, null, new \Twilio\Http\CurlClient($curlOptions));
+          
+          // Formatear el número de teléfono para WhatsApp
+          $formattedNumber = preg_replace('/[^0-9]/', '', $to);
+          
+          // Si el número comienza con 0, eliminarlo
+          if (strlen($formattedNumber) > 10 && substr($formattedNumber, 0, 1) === '0') {
+              $formattedNumber = substr($formattedNumber, 1);
+          }
+          
+          // Formatear el número para WhatsApp
+          $whatsappTo = 'whatsapp:+' . $formattedNumber;
+          
+          // Fecha y hora para la plantilla
+          $date = date('d/m/Y');
+          $time = date('h:i A');
+          
+          // Crear el JSON de variables de contenido
+          $contentVariables = json_encode([
+              "1" => $date,
+              "2" => $time
+          ]);
+          
+          \Log::info('Enviando mensaje de WhatsApp con plantilla', [
+              'to' => $whatsappTo,
+              'contentSid' => 'HXb5b62575e6e4ff6129ad7c8efe1f983e',
+              'contentVariables' => $contentVariables
+          ]);
+          
+          // Enviar el mensaje con la plantilla
+          $messageResponse = $client->messages->create(
+              $whatsappTo,
+              [
+                  'from' => 'whatsapp:+14155238886',
+                  'contentSid' => 'HXb5b62575e6e4ff6129ad7c8efe1f983e',
+                  'contentVariables' => $contentVariables
+              ]
+          );
+          
+          \Log::info('Mensaje de WhatsApp enviado exitosamente', [
+              'to' => $whatsappTo,
+              'message_sid' => $messageResponse->sid,
+              'status' => $messageResponse->status
+          ]);
+          
+          return $messageResponse->sid;
+      } catch (\Exception $e) {
+          \Log::error('Error al enviar mensaje de WhatsApp: ' . $e->getMessage(), [
+              'error_code' => $e->getCode(),
+              'error_line' => $e->getLine(),
+              'error_file' => $e->getFile()
+          ]);
+          return null;
+      }
+  }
+
+  /**
    * Crear una nueva orden
    */
   public function store(Request $request)
@@ -72,7 +236,7 @@ class OrderController extends Controller
           // Iniciar transacción
           DB::beginTransaction();
           
-          // Obtener el carrito actual usando el nuevo método
+          // Obtener el carrito actual usando el método existente
           $cart = $this->getCart($request);
           
           if (!$cart) {
@@ -92,6 +256,29 @@ class OrderController extends Controller
                   'success' => false,
                   'message' => 'El carrito está vacío'
               ], 400);
+          }
+          
+          // Verificar stock disponible antes de procesar la orden
+          $stockErrors = [];
+          foreach ($cartItems as $item) {
+              $product = Product::find($item->product_id);
+              if (!$product) {
+                  $stockErrors[] = "El producto ya no está disponible.";
+                  continue;
+              }
+              
+              if ($product->stock < $item->quantity) {
+                  $stockErrors[] = "No hay suficiente stock para '{$product->name}'. Disponible: {$product->stock}, Solicitado: {$item->quantity}";
+              }
+          }
+          
+          if (!empty($stockErrors)) {
+              DB::rollBack();
+              return response()->json([
+                  'success' => false,
+                  'message' => 'Error de stock',
+                  'errors' => $stockErrors
+              ], 422);
           }
           
           // Calcular el total de forma explícita
@@ -121,6 +308,22 @@ class OrderController extends Controller
               $orderItem->quantity = $item->quantity;
               $orderItem->price = $item->price;
               $orderItem->save();
+
+              // Actualizar el stock del producto
+              $product = Product::find($item->product_id);
+              if ($product) {
+                  // Asegurarse de que el stock no sea negativo
+                  $newStock = max(0, $product->stock - $item->quantity);
+                  $product->stock = $newStock;
+                  $product->save();
+                  
+                  \Log::info('Stock actualizado para producto', [
+                      'product_id' => $product->id,
+                      'previous_stock' => $product->stock + $item->quantity,
+                      'new_stock' => $product->stock,
+                      'quantity_ordered' => $item->quantity
+                  ]);
+              }
           }
           
           // Marcar el carrito como completado
@@ -146,11 +349,90 @@ class OrderController extends Controller
           
           \Log::info('Orden creada correctamente:', ['order_id' => $order->id]);
           
+          // Variable para indicar si se envió el mensaje de WhatsApp
+          $whatsappSent = false;
+          
+          // Preparar y enviar mensaje de WhatsApp
+          try {
+              // Registrar el número de teléfono que se usará
+              \Log::info('Preparando envío de WhatsApp', [
+                  'telefono' => $request->phone,
+                  'order_id' => $order->id
+              ]);
+              
+              // Crear un mensaje personalizado para la orden
+              $orderItems = '';
+              foreach ($cartItems as $item) {
+                  $orderItems .= "- " . $item->quantity . "x " . $item->product->name . "\n";
+              }
+              
+              // Formatear el método de pago para el mensaje
+              $paymentMethod = '';
+              switch ($request->payment_method) {
+                  case 'cash':
+                      $paymentMethod = 'Efectivo';
+                      break;
+                  case 'card':
+                      $paymentMethod = 'Tarjeta';
+                      break;
+                  case 'transfer':
+                      $paymentMethod = 'Transferencia';
+                      break;
+                  default:
+                      $paymentMethod = $request->payment_method;
+              }
+              
+              // Crear el mensaje personalizado
+              $whatsappMessage = "¡Gracias por tu compra en Panadería!\n\n" .
+                               "*Orden #" . $order->id . "*\n" .
+                               "Fecha: " . date('d/m/Y') . "\n" .
+                               "Cliente: " . $request->name . "\n" .
+                               "Total: $" . number_format($order->total, 2) . "\n" .
+                               "Método de pago: " . $paymentMethod . "\n\n" .
+                               "*Productos:*\n" . $orderItems . "\n" .
+                               "*Dirección de entrega:*\n" . $request->shipping_address . "\n\n" .
+                               "Tu pedido será procesado pronto. Para cualquier consulta, responde a este mensaje.";
+              
+              \Log::info('Mensaje de WhatsApp a enviar', [
+                  'mensaje' => $whatsappMessage
+              ]);
+              
+              // Intentar enviar primero con mensaje personalizado
+              $messageSid = $this->sendWhatsAppMessage($request->phone, $whatsappMessage);
+              
+              // Si falla, intentar con la plantilla como respaldo
+              if (!$messageSid) {
+                  \Log::warning('No se pudo enviar mensaje personalizado, intentando con plantilla');
+                  $messageSid = $this->sendWhatsAppTemplate($request->phone);
+              }
+              
+              // Registrar si se envió el mensaje
+              if ($messageSid) {
+                  \Log::info('Mensaje de WhatsApp enviado para la orden', [
+                      'order_id' => $order->id,
+                      'message_sid' => $messageSid
+                  ]);
+                  $whatsappSent = true;
+              } else {
+                  \Log::warning('No se pudo enviar el mensaje de WhatsApp', [
+                      'order_id' => $order->id
+                  ]);
+              }
+          } catch (\Exception $e) {
+              // Capturar cualquier error en el envío del mensaje, pero no afectar la creación de la orden
+              \Log::error('Excepción al enviar mensaje de WhatsApp: ' . $e->getMessage(), [
+                  'order_id' => $order->id,
+                  'exception_class' => get_class($e),
+                  'trace' => $e->getTraceAsString()
+              ]);
+          }
+          
           // Establecer la cookie con el ID del nuevo carrito
           $response = response()->json([
               'success' => true,
               'message' => 'Orden creada correctamente',
-              'order_id' => $order->id
+              'order_id' => $order->id,
+              'whatsapp_sent' => $whatsappSent
           ]);
           
           $response->cookie('cart_id', $newCart->id, 60 * 24 * 30);
@@ -183,4 +465,3 @@ class OrderController extends Controller
       }
   }
 }
-

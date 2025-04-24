@@ -43,6 +43,7 @@ Route::get('/products/{id}', [WebProductController::class, 'show']);
      Route::put('/cart/items/{id}', [CartController::class, 'updateCartItem']);
      Route::delete('/cart/items/{id}', [CartController::class, 'removeFromCart']);
      Route::delete('/cart', [CartController::class, 'clearCart']);
+     Route::post('/cart/remove-out-of-stock', [CartController::class, 'removeOutOfStock']);
 
 
      
