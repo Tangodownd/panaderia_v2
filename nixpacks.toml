@@ -1,13 +1,12 @@
 [phases.setup]
+
 nixPkgs = [
-  "php81", 
-  "php81Extensions.pdo_mysql", 
-  "php81Extensions.gd", 
-  "php81Extensions.zip", 
-  "php81Extensions.mbstring", 
-  "php81Extensions.intl", 
-  "php81Packages.composer",  # ¡Cambiado aquí!
-  "nodejs", 
+  "php83",  # Versión más nueva
+  "php83Extensions.pdo_mysql", 
+  "php83Extensions.gd", 
+  # ... resto de extensiones
+  "php83Packages.composer",
+  "nodejs",
   "npm"
 ]
 [phases.build]
