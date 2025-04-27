@@ -1,6 +1,9 @@
 import { createRouter, createWebHistory } from "vue-router"
 import HomePage from "./components/client/HomePage.vue"
 import ProductCatalog from "./components/client/ProductCatalog.vue"
+import TerminosCondiciones from "./components/client/TerminosCondiciones.vue"
+import PoliticaPrivacidad from "./components/client/PoliticaPrivacidad.vue"
+import NotFound from "./components/client/NotFound.vue"
 
 const routes = [
   {
@@ -14,6 +17,21 @@ const routes = [
     component: ProductCatalog,
     props: true,
   },
+  {
+    path: "/terminos-y-condiciones",
+    name: "terminos",
+    component: TerminosCondiciones,
+  },
+  {
+    path: "/politica-de-privacidad",
+    name: "privacidad",
+    component: PoliticaPrivacidad,
+  },
+  {
+    path: "/:pathMatch(.*)*",
+    name: "notFound",
+    component: NotFound,
+  }
 ]
 
 const router = createRouter({
@@ -34,4 +52,3 @@ const router = createRouter({
 })
 
 export default router
-

@@ -8,7 +8,23 @@ import Mostrar from "./components/blog/Mostrar.vue"
 import Crear from "./components/blog/Crear.vue"
 import Editar from "./components/blog/Editar.vue"
 
+// Importar correctamente los componentes de términos y condiciones
+import TerminosCondiciones from "./components/client/TerminosCondiciones.vue"
+import PoliticaPrivacidad from "./components/client/PoliticaPrivacidad.vue"
+
 const routes = [
+  // Rutas públicas para términos y condiciones
+  {
+    path: '/terminos-y-condiciones',
+    name: 'TerminosCondiciones',
+    component: TerminosCondiciones
+  },
+  {
+    path: '/politica-de-privacidad',
+    name: 'PoliticaPrivacidad',
+    component: PoliticaPrivacidad
+  },
+  
   // Rutas de administración
   {
     path: "/admin/login",
@@ -44,7 +60,7 @@ const routes = [
         name: "editarBlog",
         component: Editar,
         props: true,
-      },
+      }
     ],
   },
 ]
@@ -82,4 +98,3 @@ router.beforeEach((to, from, next) => {
 
 export default router
 export { routes }
-

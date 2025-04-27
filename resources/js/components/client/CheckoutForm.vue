@@ -1,147 +1,161 @@
 <template>
   <div class="checkout-form">
-  <!-- Modal personalizado de checkout -->
-  <div v-if="isCheckoutOpen" class="custom-modal-backdrop" @click="closeModal">
-    <div class="custom-modal-content bg-beige" @click.stop>
-      <div class="custom-modal-header bg-brown text-white">
-        <h5 class="modal-title">Finalizar Compra</h5>
-        <button type="button" class="btn-close btn-close-white" @click="closeModal" aria-label="Close"></button>
-      </div>
-      <div class="custom-modal-body">
-        <div v-if="loading" class="text-center py-4">
-          <div class="spinner-border text-brown" role="status">
-            <span class="visually-hidden">Cargando...</span>
+    <!-- Modal personalizado de checkout -->
+    <div v-if="isCheckoutOpen" class="custom-modal-backdrop" @click="closeModal">
+      <div class="custom-modal-content bg-beige" @click.stop>
+        <div class="custom-modal-header bg-brown text-white">
+          <h5 class="modal-title">Finalizar Compra</h5>
+          <button type="button" class="btn-close btn-close-white" @click="closeModal" aria-label="Close"></button>
+        </div>
+        <div class="custom-modal-body">
+          <div v-if="loading" class="text-center py-4">
+            <div class="spinner-border text-brown" role="status">
+              <span class="visually-hidden">Cargando...</span>
+            </div>
+            <p class="mt-2">Procesando tu pedido...</p>
           </div>
-          <p class="mt-2">Procesando tu pedido...</p>
-        </div>
-        
-        <div v-else-if="orderCompleted" class="text-center py-4">
-          <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
-          <h5 class="text-success">¡Pedido completado con éxito!</h5>
-          <p>Tu número de pedido es: <strong>{{ orderNumber }}</strong></p>
-          <p>Tu pedido ha sido recibido y está siendo procesado.</p>
-          <p v-if="whatsappSent" class="mt-2">
-            <i class="fab fa-whatsapp text-success"></i> 
-            Hemos enviado un mensaje de WhatsApp al número proporcionado con los detalles de tu pedido.
-          </p>
-          <p v-else class="mt-2 text-muted small">
-            <i class="fas fa-info-circle"></i>
-            Nota: Para recibir mensajes de WhatsApp, asegúrate de enviar primero "join [código]" al número de WhatsApp de Twilio.
-          </p>
-          <button class="btn btn-brown mt-3" @click="closeModal">Continuar comprando</button>
-        </div>
-        
-        <div v-else>
-          <div class="row">
-            <div class="col-md-6">
-              <h6 class="mb-3">Información de contacto</h6>
-              <div class="mb-3">
-                <label for="name" class="form-label">Nombre completo</label>
-                <input type="text" class="form-control" id="name" v-model="formData.name" required>
-                <div v-if="validationErrors.name" class="text-danger mt-1">{{ validationErrors.name }}</div>
-              </div>
-              <div class="mb-3">
-                <label for="email" class="form-label">Correo electrónico</label>
-                <input type="email" class="form-control" id="email" v-model="formData.email" required>
-                <div v-if="validationErrors.email" class="text-danger mt-1">{{ validationErrors.email }}</div>
-              </div>
-              <div class="mb-3">
-                <label for="phone" class="form-label">Teléfono</label>
-                <div class="input-group">
-                  <select class="form-select" style="max-width: 120px;" v-model="selectedCountryCode">
-                    <option value="+58">Venezuela (+58)</option>
-                    <option value="+1">Estados Unidos (+1)</option>
-                    <option value="+57">Colombia (+57)</option>
-                    <option value="+34">España (+34)</option>
-                    <option value="+52">México (+52)</option>
-                    <option value="+51">Perú (+51)</option>
-                    <option value="+56">Chile (+56)</option>
-                    <option value="+54">Argentina (+54)</option>
-                    <option value="+55">Brasil (+55)</option>
-                  </select>
-                  <input 
-                    type="tel" 
-                    class="form-control" 
-                    id="phone" 
-                    v-model="phoneNumber" 
-                    placeholder="Ej: 4121234567"
-                    @input="validatePhone"
-                    required
-                  >
+          
+          <div v-else-if="orderCompleted" class="text-center py-4">
+            <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+            <h5 class="text-success">¡Pedido completado con éxito!</h5>
+            <p>Tu número de pedido es: <strong>{{ orderNumber }}</strong></p>
+            <p>Tu pedido ha sido recibido y está siendo procesado.</p>
+            <p v-if="whatsappSent" class="mt-2">
+              <i class="fab fa-whatsapp text-success"></i> 
+              Hemos enviado un mensaje de WhatsApp al número proporcionado con los detalles de tu pedido.
+            </p>
+            <p v-else class="mt-2 text-muted small">
+              <i class="fas fa-info-circle"></i>
+              Nota: Para recibir mensajes de WhatsApp, asegúrate de enviar primero "join [código]" al número de WhatsApp de Twilio.
+            </p>
+            <button class="btn btn-brown mt-3" @click="closeModal">Continuar comprando</button>
+          </div>
+          
+          <div v-else>
+            <div class="row">
+              <div class="col-md-6">
+                <h6 class="mb-3">Información de contacto</h6>
+                <div class="mb-3">
+                  <label for="name" class="form-label">Nombre completo</label>
+                  <input type="text" class="form-control" id="name" v-model="formData.name" required>
+                  <div v-if="validationErrors.name" class="text-danger mt-1">{{ validationErrors.name }}</div>
                 </div>
-                <div v-if="validationErrors.phone" class="text-danger mt-1">{{ validationErrors.phone }}</div>
+                <div class="mb-3">
+                  <label for="email" class="form-label">Correo electrónico</label>
+                  <input type="email" class="form-control" id="email" v-model="formData.email" required>
+                  <div v-if="validationErrors.email" class="text-danger mt-1">{{ validationErrors.email }}</div>
+                </div>
+                <div class="mb-3">
+                  <label for="phone" class="form-label">Teléfono</label>
+                  <div class="input-group">
+                    <select class="form-select" style="max-width: 120px;" v-model="selectedCountryCode">
+                      <option value="+58">Venezuela (+58)</option>
+                      <option value="+1">Estados Unidos (+1)</option>
+                      <option value="+57">Colombia (+57)</option>
+                      <option value="+34">España (+34)</option>
+                      <option value="+52">México (+52)</option>
+                      <option value="+51">Perú (+51)</option>
+                      <option value="+56">Chile (+56)</option>
+                      <option value="+54">Argentina (+54)</option>
+                      <option value="+55">Brasil (+55)</option>
+                    </select>
+                    <input 
+                      type="tel" 
+                      class="form-control" 
+                      id="phone" 
+                      v-model="phoneNumber" 
+                      placeholder="Ej: 4121234567"
+                      @input="validatePhone"
+                      required
+                    >
+                  </div>
+                  <div v-if="validationErrors.phone" class="text-danger mt-1">{{ validationErrors.phone }}</div>
+                </div>
+                <div class="mb-3">
+                  <label for="shipping_address" class="form-label">Dirección de entrega</label>
+                  <textarea class="form-control" id="shipping_address" rows="3" v-model="formData.shipping_address" required></textarea>
+                  <div v-if="validationErrors.shipping_address" class="text-danger mt-1">{{ validationErrors.shipping_address }}</div>
+                </div>
               </div>
-              <div class="mb-3">
-                <label for="shipping_address" class="form-label">Dirección de entrega</label>
-                <textarea class="form-control" id="shipping_address" rows="3" v-model="formData.shipping_address" required></textarea>
-                <div v-if="validationErrors.shipping_address" class="text-danger mt-1">{{ validationErrors.shipping_address }}</div>
+              
+              <div class="col-md-6">
+                <h6 class="mb-3">Resumen del pedido</h6>
+                <div class="list-group mb-3">
+                  <div v-for="item in cart.items" :key="item.id" class="list-group-item bg-cream d-flex justify-content-between align-items-center">
+                    <div>
+                      <span>{{ item.product.name }}</span>
+                      <small class="d-block text-muted">{{ item.quantity }} x ${{ item.price }}</small>
+                    </div>
+                    <span>${{ (item.quantity * item.price).toFixed(2) }}</span>
+                  </div>
+                </div>
+                
+                <div class="card bg-cream mb-3">
+                  <div class="card-body">
+                    <h6 class="card-title">Total</h6>
+                    <div class="d-flex justify-content-between fw-bold">
+                      <span>Total a pagar</span>
+                      <span>${{ cart.total.toFixed(2) }}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <h6 class="mb-3">Método de pago</h6>
+                <div class="mb-3">
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="payment_method" id="payment_cash" value="cash" v-model="formData.payment_method" checked>
+                    <label class="form-check-label" for="payment_cash">
+                      Efectivo
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="payment_method" id="payment_transfer" value="transfer" v-model="formData.payment_method">
+                    <label class="form-check-label" for="payment_transfer">
+                      Transferencia bancaria
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="payment_method" id="payment_card" value="card" v-model="formData.payment_method">
+                    <label class="form-check-label" for="payment_card">
+                      Tarjeta de crédito/débito
+                    </label>
+                  </div>
+                </div>
+                
+                <div class="mb-3">
+                  <label for="notes" class="form-label">Notas adicionales</label>
+                  <textarea class="form-control" id="notes" rows="2" v-model="formData.notes"></textarea>
+                </div>
+                
+                <!-- Términos y condiciones con enlaces a páginas nuevas -->
+                <div class="mb-3">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="terms" v-model="formData.termsAccepted">
+                    <label class="form-check-label" for="terms">
+                      He leído y acepto los 
+                      <a href="/terminos-y-condiciones" target="_blank">Términos y Condiciones</a> 
+                      y la 
+                      <a href="/politica-de-privacidad" target="_blank">Política de Privacidad</a>
+                    </label>
+                  </div>
+                  <div v-if="validationErrors.terms" class="text-danger mt-1">{{ validationErrors.terms }}</div>
+                </div>
               </div>
             </div>
             
-            <div class="col-md-6">
-              <h6 class="mb-3">Resumen del pedido</h6>
-              <div class="list-group mb-3">
-                <div v-for="item in cart.items" :key="item.id" class="list-group-item bg-cream d-flex justify-content-between align-items-center">
-                  <div>
-                    <span>{{ item.product.name }}</span>
-                    <small class="d-block text-muted">{{ item.quantity }} x ${{ item.price }}</small>
-                  </div>
-                  <span>${{ (item.quantity * item.price).toFixed(2) }}</span>
-                </div>
-              </div>
-              
-              <div class="card bg-cream mb-3">
-                <div class="card-body">
-                  <h6 class="card-title">Total</h6>
-                  <div class="d-flex justify-content-between fw-bold">
-                    <span>Total a pagar</span>
-                    <span>${{ cart.total.toFixed(2) }}</span>
-                  </div>
-                </div>
-              </div>
-              
-              <h6 class="mb-3">Método de pago</h6>
-              <div class="mb-3">
-                <div class="form-check">
-                  <input class="form-check-input" type="radio" name="payment_method" id="payment_cash" value="cash" v-model="formData.payment_method" checked>
-                  <label class="form-check-label" for="payment_cash">
-                    Efectivo
-                  </label>
-                </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="radio" name="payment_method" id="payment_transfer" value="transfer" v-model="formData.payment_method">
-                  <label class="form-check-label" for="payment_transfer">
-                    Transferencia bancaria
-                  </label>
-                </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="radio" name="payment_method" id="payment_card" value="card" v-model="formData.payment_method">
-                  <label class="form-check-label" for="payment_card">
-                    Tarjeta de crédito/débito
-                  </label>
-                </div>
-              </div>
-              
-              <div class="mb-3">
-                <label for="notes" class="form-label">Notas adicionales</label>
-                <textarea class="form-control" id="notes" rows="2" v-model="formData.notes"></textarea>
-              </div>
+            <div class="d-grid gap-2 mt-3">
+              <button @click="submitOrder" class="btn btn-brown" :disabled="loading">
+                <span v-if="loading">
+                  <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                  Procesando...
+                </span>
+                <span v-else>Confirmar pedido</span>
+              </button>
             </div>
-          </div>
-          
-          <div class="d-grid gap-2 mt-3">
-            <button @click="submitOrder" class="btn btn-brown" :disabled="loading">
-              <span v-if="loading">
-                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                Procesando...
-              </span>
-              <span v-else>Confirmar pedido</span>
-            </button>
           </div>
         </div>
       </div>
     </div>
-  </div>
   </div>
 </template>
   
@@ -166,7 +180,8 @@ export default {
       phone: '',
       shipping_address: '',
       payment_method: 'cash',
-      notes: ''
+      notes: '',
+      termsAccepted: false
     });
     
     const loading = ref(false);
@@ -180,7 +195,8 @@ export default {
       name: '',
       email: '',
       phone: '',
-      shipping_address: ''
+      shipping_address: '',
+      terms: ''
     });
     
     // Actualizar el número de teléfono completo cuando cambie el código de país o el número
@@ -279,6 +295,14 @@ export default {
         isValid = false;
       } else {
         validationErrors.value.shipping_address = '';
+      }
+      
+      // Validar términos y condiciones
+      if (!formData.value.termsAccepted) {
+        validationErrors.value.terms = 'Debes aceptar los términos y condiciones';
+        isValid = false;
+      } else {
+        validationErrors.value.terms = '';
       }
       
       return isValid;
@@ -393,7 +417,8 @@ export default {
           phone: '',
           shipping_address: '',
           payment_method: 'cash',
-          notes: ''
+          notes: '',
+          termsAccepted: false
         };
         
         // Resetear el estado
@@ -405,7 +430,8 @@ export default {
           name: '',
           email: '',
           phone: '',
-          shipping_address: ''
+          shipping_address: '',
+          terms: ''
         };
       }
       
@@ -449,7 +475,7 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1060; /* Mayor que el z-index del modal del carrito */
+  z-index: 1050;
 }
   
 .custom-modal-content {
@@ -507,4 +533,3 @@ export default {
   font-size: 0.875rem;
 }
 </style>
-
