@@ -1,51 +1,57 @@
+// resources/js/admin-app.js
 import { createApp } from "vue"
 import AdminApp from "./components/admin/AdminApp.vue"
 import router from "./routes-admin"
-import axios from "axios"
+import auth from "./services/auth"
 
-// Configurar axios
-axios.defaults.baseURL = window.location.origin
-axios.defaults.headers.common["X-Requested-With"] = "XMLHttpRequest"
-axios.defaults.headers.common["Accept"] = "application/json"
+// Usa la misma instancia de Axios en toda la app
+import axios from "./axios-config"
 
-// Configurar el token CSRF
-const csrfToken = document.head.querySelector('meta[name="csrf-token"]')
-if (csrfToken) {
-  axios.defaults.headers.common["X-CSRF-TOKEN"] = csrfToken.content
+// 1) Inicializa el estado de autenticación (recupera token/usuario si aplica)
+auth.initializeAuth?.()
+
+// 2) Aplica el token actual (si existe) al header Authorization de Axios
+const token = auth.getToken?.()
+if (token) {
+  axios.defaults.headers.common["Authorization"] = `Bearer ${token}`
+} else {
+  delete axios.defaults.headers.common["Authorization"]
 }
 
-// Interceptor para manejar errores de autenticación
+// 3) (Opcional pero recomendado) Interceptor de REQUEST para adjuntar siempre el token
+axios.interceptors.request.use(
+  (config) => {
+    const t = auth.getToken?.()
+    if (t) {
+      config.headers = config.headers || {}
+      config.headers["Authorization"] = `Bearer ${t}`
+    }
+    return config
+  },
+  (error) => Promise.reject(error)
+)
+
+// 4) Interceptor de RESPONSE 401 → cierra sesión con el servicio y redirige a login
 axios.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      localStorage.removeItem("auth_token")
-      localStorage.removeItem("user")
+    if (error?.response?.status === 401) {
+      // Centraliza el cierre de sesión en el servicio:
+      // - limpia token/usuario
+      // - quita Authorization de axios
+      // - cualquier side-effect (cookies, storage seguro, etc.)
+      auth.logout?.()
+
+      // Asegura limpiar el header por si acaso
       delete axios.defaults.headers.common["Authorization"]
+
+      // Redirige al login del admin
       router.push({ name: "adminLogin" })
     }
     return Promise.reject(error)
-  },
+  }
 )
 
-// Inicializar token si existe
-const token = localStorage.getItem("auth_token")
-if (token) {
-  axios.defaults.headers.common["Authorization"] = `Bearer ${token}`
-}
-
-// Crear la aplicación Vue
 const app = createApp(AdminApp)
-
-// Usar el router
 app.use(router)
-
-// Montar la aplicación
 app.mount("#admin-app")
-
-// Para debugging
-if (process.env.NODE_ENV === "development") {
-  console.log("Vue app mounted")
-  window.app = app
-}
-

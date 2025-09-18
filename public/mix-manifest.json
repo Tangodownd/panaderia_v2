@@ -2,5 +2,6 @@
     "/js/app.js": "/js/app.js",
     "/js/client-app.js": "/js/client-app.js",
     "/js/admin-app.js": "/js/admin-app.js",
+    "/js/legacy-ui.js": "/js/legacy-ui.js",
     "/css/app.css": "/css/app.css"
 }

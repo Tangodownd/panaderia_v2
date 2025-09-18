@@ -13746,10 +13746,7 @@ function initFeatureFlags() {
   const needWarn = [];
   if (false) {}
   if (false) {}
-  if (typeof __VUE_PROD_HYDRATION_MISMATCH_DETAILS__ !== "boolean") {
-     true && needWarn.push(`__VUE_PROD_HYDRATION_MISMATCH_DETAILS__`);
-    (0,_vue_shared__WEBPACK_IMPORTED_MODULE_1__.getGlobalThis)().__VUE_PROD_HYDRATION_MISMATCH_DETAILS__ = false;
-  }
+  if (false) {}
   if ( true && needWarn.length) {
     const multi = needWarn.length > 1;
     console.warn(
@@ -25024,6 +25021,43 @@ function render(_ctx, _cache, $props, $setup, $data, $options) {
 
 /***/ }),
 
+/***/ "./resources/js/axios-config.js":
+/*!**************************************!*\
+  !*** ./resources/js/axios-config.js ***!
+  \**************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! axios */ "./node_modules/axios/index.js");
+/* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(axios__WEBPACK_IMPORTED_MODULE_0__);
+// resources/js/axios-config.js
+
+(axios__WEBPACK_IMPORTED_MODULE_0___default().defaults).baseURL = window.location.origin;
+(axios__WEBPACK_IMPORTED_MODULE_0___default().defaults).headers.common["X-Requested-With"] = "XMLHttpRequest";
+(axios__WEBPACK_IMPORTED_MODULE_0___default().defaults).headers.common["Accept"] = "application/json";
+
+// CSRF desde <meta name="csrf-token">
+const csrf = document.head.querySelector('meta[name="csrf-token"]');
+if (csrf) {
+  (axios__WEBPACK_IMPORTED_MODULE_0___default().defaults).headers.common["X-CSRF-TOKEN"] = csrf.content;
+}
+
+// Cookies si usas sesión basada en cookies
+(axios__WEBPACK_IMPORTED_MODULE_0___default().defaults).withCredentials = true;
+
+// Token JWT si existe
+const token = localStorage.getItem("auth_token");
+if (token) {
+  (axios__WEBPACK_IMPORTED_MODULE_0___default().defaults).headers.common["Authorization"] = `Bearer ${token}`;
+}
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = ((axios__WEBPACK_IMPORTED_MODULE_0___default()));
+
+/***/ }),
+
 /***/ "./resources/js/routes-admin.js":
 /*!**************************************!*\
   !*** ./resources/js/routes-admin.js ***!
@@ -25035,7 +25069,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
-/* harmony import */ var vue_router__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! vue-router */ "./node_modules/vue-router/dist/vue-router.mjs");
+/* harmony import */ var vue_router__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! vue-router */ "./node_modules/vue-router/dist/vue-router.mjs");
 /* harmony import */ var _components_admin_Login_vue__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./components/admin/Login.vue */ "./resources/js/components/admin/Login.vue");
 /* harmony import */ var _components_admin_Dashboard_vue__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./components/admin/Dashboard.vue */ "./resources/js/components/admin/Dashboard.vue");
 /* harmony import */ var _components_admin_DashboardHome_vue__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./components/admin/DashboardHome.vue */ "./resources/js/components/admin/DashboardHome.vue");
@@ -25044,9 +25078,11 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _components_blog_Editar_vue__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./components/blog/Editar.vue */ "./resources/js/components/blog/Editar.vue");
 /* harmony import */ var _components_admin_AdminUsers_vue__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./components/admin/AdminUsers.vue */ "./resources/js/components/admin/AdminUsers.vue");
 /* harmony import */ var _components_admin_AdminCategories_vue__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./components/admin/AdminCategories.vue */ "./resources/js/components/admin/AdminCategories.vue");
+/* harmony import */ var _services_auth__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./services/auth */ "./resources/js/services/auth.js");
+// resources/js/routes-admin.js
 
 
-// Componentes de administración
+// Admin components
 
 
 
@@ -25054,6 +25090,9 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
+
+
+// Servicio de auth centralizado (en lugar de leer localStorage aquí)
 
 const routes = [{
   path: "/admin/login",
@@ -25092,26 +25131,97 @@ const routes = [{
     component: _components_admin_AdminUsers_vue__WEBPACK_IMPORTED_MODULE_6__["default"]
   }]
 }];
-const router = (0,vue_router__WEBPACK_IMPORTED_MODULE_8__.createRouter)({
-  history: (0,vue_router__WEBPACK_IMPORTED_MODULE_8__.createWebHistory)(),
+const router = (0,vue_router__WEBPACK_IMPORTED_MODULE_9__.createRouter)({
+  history: (0,vue_router__WEBPACK_IMPORTED_MODULE_9__.createWebHistory)(),
   routes
 });
 
-// Middleware global para proteger rutas
+// Guard global: protege todo lo que sea /admin excepto el login
 router.beforeEach((to, from, next) => {
-  // Si la ruta incluye /admin/dashboard y el usuario no está autenticado
-  if (to.path.includes("/admin/dashboard")) {
-    const token = localStorage.getItem("auth_token");
-    if (!token) {
-      next({
-        name: "adminLogin"
-      });
-      return;
-    }
+  if (to.path.startsWith("/admin") && to.name !== "adminLogin") {
+    if (!_services_auth__WEBPACK_IMPORTED_MODULE_8__["default"].isAuthenticated()) return next({
+      name: "adminLogin"
+    });
   }
-  next();
+  return next();
 });
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (router);
+
+/***/ }),
+
+/***/ "./resources/js/services/auth.js":
+/*!***************************************!*\
+  !*** ./resources/js/services/auth.js ***!
+  \***************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! axios */ "./node_modules/axios/index.js");
+/* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(axios__WEBPACK_IMPORTED_MODULE_0__);
+
+const TOKEN_KEY = "auth_token";
+const USER_KEY = "user";
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = ({
+  login(email, password, remember) {
+    return axios__WEBPACK_IMPORTED_MODULE_0___default().post("/api/login", {
+      email,
+      password,
+      remember
+    }).then(response => {
+      this.setToken(response.data.token);
+      this.setUser(response.data.user);
+      return response.data.user;
+    });
+  },
+  logout() {
+    return axios__WEBPACK_IMPORTED_MODULE_0___default().post("/api/logout").then(() => {
+      this.clearAuth();
+    });
+  },
+  setToken(token) {
+    localStorage.setItem(TOKEN_KEY, token);
+    (axios__WEBPACK_IMPORTED_MODULE_0___default().defaults).headers.common["Authorization"] = `Bearer ${token}`;
+  },
+  setUser(user) {
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+  },
+  getToken() {
+    return localStorage.getItem(TOKEN_KEY);
+  },
+  getUser() {
+    const userStr = localStorage.getItem(USER_KEY);
+    if (!userStr) return null;
+    try {
+      return JSON.parse(userStr);
+    } catch (e) {
+      return null;
+    }
+  },
+  clearAuth() {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    delete (axios__WEBPACK_IMPORTED_MODULE_0___default().defaults).headers.common["Authorization"];
+  },
+  isAuthenticated() {
+    return !!this.getToken();
+  },
+  isAdmin() {
+    const user = this.getUser();
+    return user && user.role === "admin";
+  },
+  initializeAuth() {
+    const token = this.getToken();
+    if (token) {
+      (axios__WEBPACK_IMPORTED_MODULE_0___default().defaults).headers.common["Authorization"] = `Bearer ${token}`;
+      return true;
+    }
+    return false;
+  }
+});
 
 /***/ }),
 
@@ -31034,57 +31144,60 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var vue__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! vue */ "./node_modules/vue/dist/vue.esm-bundler.js");
 /* harmony import */ var _components_admin_AdminApp_vue__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./components/admin/AdminApp.vue */ "./resources/js/components/admin/AdminApp.vue");
 /* harmony import */ var _routes_admin__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./routes-admin */ "./resources/js/routes-admin.js");
-/* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! axios */ "./node_modules/axios/index.js");
-/* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(axios__WEBPACK_IMPORTED_MODULE_3__);
+/* harmony import */ var _services_auth__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./services/auth */ "./resources/js/services/auth.js");
+/* harmony import */ var _axios_config__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./axios-config */ "./resources/js/axios-config.js");
+// resources/js/admin-app.js
 
 
 
 
 
-// Configurar axios
-(axios__WEBPACK_IMPORTED_MODULE_3___default().defaults).baseURL = window.location.origin;
-(axios__WEBPACK_IMPORTED_MODULE_3___default().defaults).headers.common["X-Requested-With"] = "XMLHttpRequest";
-(axios__WEBPACK_IMPORTED_MODULE_3___default().defaults).headers.common["Accept"] = "application/json";
+// Usa la misma instancia de Axios en toda la app
 
-// Configurar el token CSRF
-const csrfToken = document.head.querySelector('meta[name="csrf-token"]');
-if (csrfToken) {
-  (axios__WEBPACK_IMPORTED_MODULE_3___default().defaults).headers.common["X-CSRF-TOKEN"] = csrfToken.content;
+
+// 1) Inicializa el estado de autenticación (recupera token/usuario si aplica)
+_services_auth__WEBPACK_IMPORTED_MODULE_3__["default"].initializeAuth?.();
+
+// 2) Aplica el token actual (si existe) al header Authorization de Axios
+const token = _services_auth__WEBPACK_IMPORTED_MODULE_3__["default"].getToken?.();
+if (token) {
+  _axios_config__WEBPACK_IMPORTED_MODULE_4__["default"].defaults.headers.common["Authorization"] = `Bearer ${token}`;
+} else {
+  delete _axios_config__WEBPACK_IMPORTED_MODULE_4__["default"].defaults.headers.common["Authorization"];
 }
 
-// Interceptor para manejar errores de autenticación
-axios__WEBPACK_IMPORTED_MODULE_3___default().interceptors.response.use(response => response, error => {
-  if (error.response && error.response.status === 401) {
-    localStorage.removeItem("auth_token");
-    localStorage.removeItem("user");
-    delete (axios__WEBPACK_IMPORTED_MODULE_3___default().defaults).headers.common["Authorization"];
+// 3) (Opcional pero recomendado) Interceptor de REQUEST para adjuntar siempre el token
+_axios_config__WEBPACK_IMPORTED_MODULE_4__["default"].interceptors.request.use(config => {
+  const t = _services_auth__WEBPACK_IMPORTED_MODULE_3__["default"].getToken?.();
+  if (t) {
+    config.headers = config.headers || {};
+    config.headers["Authorization"] = `Bearer ${t}`;
+  }
+  return config;
+}, error => Promise.reject(error));
+
+// 4) Interceptor de RESPONSE 401 → cierra sesión con el servicio y redirige a login
+_axios_config__WEBPACK_IMPORTED_MODULE_4__["default"].interceptors.response.use(response => response, error => {
+  if (error?.response?.status === 401) {
+    // Centraliza el cierre de sesión en el servicio:
+    // - limpia token/usuario
+    // - quita Authorization de axios
+    // - cualquier side-effect (cookies, storage seguro, etc.)
+    _services_auth__WEBPACK_IMPORTED_MODULE_3__["default"].logout?.();
+
+    // Asegura limpiar el header por si acaso
+    delete _axios_config__WEBPACK_IMPORTED_MODULE_4__["default"].defaults.headers.common["Authorization"];
+
+    // Redirige al login del admin
     _routes_admin__WEBPACK_IMPORTED_MODULE_2__["default"].push({
       name: "adminLogin"
     });
   }
   return Promise.reject(error);
 });
-
-// Inicializar token si existe
-const token = localStorage.getItem("auth_token");
-if (token) {
-  (axios__WEBPACK_IMPORTED_MODULE_3___default().defaults).headers.common["Authorization"] = `Bearer ${token}`;
-}
-
-// Crear la aplicación Vue
 const app = (0,vue__WEBPACK_IMPORTED_MODULE_0__.createApp)(_components_admin_AdminApp_vue__WEBPACK_IMPORTED_MODULE_1__["default"]);
-
-// Usar el router
 app.use(_routes_admin__WEBPACK_IMPORTED_MODULE_2__["default"]);
-
-// Montar la aplicación
 app.mount("#admin-app");
-
-// Para debugging
-if (true) {
-  console.log("Vue app mounted");
-  window.app = app;
-}
 })();
 
 /******/ })()

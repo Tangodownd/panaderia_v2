@@ -14,32 +14,17 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="{{ asset('css/app.css') }}" rel="stylesheet">
-
-    <!-- Scripts -->
-    <script src="{{ asset('js/app.js') }}" defer></script>
 </head>
 <body>
+    <!-- Vue 2 Legacy App -->
     <div id="app">
         @yield('content')
     </div>
 
     <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <!-- Configuración de CSRF para Axios -->
-    <script>
-        window.Laravel = {
-            csrfToken: "{{ csrf_token() }}"
-        };
-        
-        // Configurar Axios para incluir el token CSRF en todas las solicitudes
-        document.addEventListener('DOMContentLoaded', function() {
-            if (window.axios) {
-                window.axios.defaults.headers.common['X-CSRF-TOKEN'] = window.Laravel.csrfToken;
-                window.axios.defaults.withCredentials = true; // Importante para las cookies
-            }
-        });
-    </script>
+
+    <!-- Vue 2 Legacy JS -->
+    <script src="{{ mix('js/app.js') }}" defer></script>
 </body>
 </html>
-

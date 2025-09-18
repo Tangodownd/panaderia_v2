@@ -13746,10 +13746,7 @@ function initFeatureFlags() {
   const needWarn = [];
   if (false) {}
   if (false) {}
-  if (typeof __VUE_PROD_HYDRATION_MISMATCH_DETAILS__ !== "boolean") {
-     true && needWarn.push(`__VUE_PROD_HYDRATION_MISMATCH_DETAILS__`);
-    (0,_vue_shared__WEBPACK_IMPORTED_MODULE_1__.getGlobalThis)().__VUE_PROD_HYDRATION_MISMATCH_DETAILS__ = false;
-  }
+  if (false) {}
   if ( true && needWarn.length) {
     const multi = needWarn.length > 1;
     console.warn(
@@ -25185,44 +25182,40 @@ function render(_ctx, _cache, $props, $setup, $data, $options) {
 
 /***/ }),
 
-/***/ "./resources/js/bootstrap.js":
-/*!***********************************!*\
-  !*** ./resources/js/bootstrap.js ***!
-  \***********************************/
-/***/ ((__unused_webpack_module, __unused_webpack_exports, __webpack_require__) => {
+/***/ "./resources/js/axios-config.js":
+/*!**************************************!*\
+  !*** ./resources/js/axios-config.js ***!
+  \**************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-// Asegurarse de que Axios esté configurado correctamente para enviar cookies y CSRF tokens
-window.axios = __webpack_require__(/*! axios */ "./node_modules/axios/index.js");
-window.axios.defaults.headers.common["X-Requested-With"] = "XMLHttpRequest";
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! axios */ "./node_modules/axios/index.js");
+/* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(axios__WEBPACK_IMPORTED_MODULE_0__);
+// resources/js/axios-config.js
 
-// Configurar el token CSRF
-const token = document.head.querySelector('meta[name="csrf-token"]');
-if (token) {
-  window.axios.defaults.headers.common["X-CSRF-TOKEN"] = token.content;
-} else {
-  console.error("CSRF token not found: https://laravel.com/docs/csrf#csrf-x-csrf-token");
+(axios__WEBPACK_IMPORTED_MODULE_0___default().defaults).baseURL = window.location.origin;
+(axios__WEBPACK_IMPORTED_MODULE_0___default().defaults).headers.common["X-Requested-With"] = "XMLHttpRequest";
+(axios__WEBPACK_IMPORTED_MODULE_0___default().defaults).headers.common["Accept"] = "application/json";
+
+// CSRF desde <meta name="csrf-token">
+const csrf = document.head.querySelector('meta[name="csrf-token"]');
+if (csrf) {
+  (axios__WEBPACK_IMPORTED_MODULE_0___default().defaults).headers.common["X-CSRF-TOKEN"] = csrf.content;
 }
 
-// Configurar withCredentials para enviar cookies
-window.axios.defaults.withCredentials = true;
+// Cookies si usas sesión basada en cookies
+(axios__WEBPACK_IMPORTED_MODULE_0___default().defaults).withCredentials = true;
 
-// Añadir interceptor para depurar las solicitudes
-window.axios.interceptors.request.use(config => {
-  console.log("Axios Request:", config);
-  return config;
-}, error => {
-  console.error("Axios Request Error:", error);
-  return Promise.reject(error);
-});
-
-// Añadir interceptor para depurar las respuestas
-window.axios.interceptors.response.use(response => {
-  console.log("Axios Response:", response);
-  return response;
-}, error => {
-  console.error("Axios Response Error:", error);
-  return Promise.reject(error);
-});
+// Token JWT si existe
+const token = localStorage.getItem("auth_token");
+if (token) {
+  (axios__WEBPACK_IMPORTED_MODULE_0___default().defaults).headers.common["Authorization"] = `Bearer ${token}`;
+}
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = ((axios__WEBPACK_IMPORTED_MODULE_0___default()));
 
 /***/ }),
 
@@ -25243,6 +25236,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _components_client_TerminosCondiciones_vue__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./components/client/TerminosCondiciones.vue */ "./resources/js/components/client/TerminosCondiciones.vue");
 /* harmony import */ var _components_client_PoliticaPrivacidad_vue__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./components/client/PoliticaPrivacidad.vue */ "./resources/js/components/client/PoliticaPrivacidad.vue");
 /* harmony import */ var _components_client_NotFound_vue__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./components/client/NotFound.vue */ "./resources/js/components/client/NotFound.vue");
+// resources/js/routes-client.js
 
 
 
@@ -25275,18 +25269,14 @@ const router = (0,vue_router__WEBPACK_IMPORTED_MODULE_5__.createRouter)({
   history: (0,vue_router__WEBPACK_IMPORTED_MODULE_5__.createWebHistory)(),
   routes,
   scrollBehavior(to, from, savedPosition) {
-    if (savedPosition) {
-      return savedPosition;
-    } else if (to.hash) {
-      return {
-        el: to.hash,
-        behavior: "smooth"
-      };
-    } else {
-      return {
-        top: 0
-      };
-    }
+    if (savedPosition) return savedPosition;
+    if (to.hash) return {
+      el: to.hash,
+      behavior: "smooth"
+    };
+    return {
+      top: 0
+    };
   }
 });
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (router);
@@ -31301,26 +31291,21 @@ var __webpack_exports__ = {};
 __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var vue__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! vue */ "./node_modules/vue/dist/vue.esm-bundler.js");
 /* harmony import */ var _components_client_ClientApp_vue__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./components/client/ClientApp.vue */ "./resources/js/components/client/ClientApp.vue");
-/* harmony import */ var vue_axios__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! vue-axios */ "./node_modules/vue-axios/dist/vue-axios.esm.min.js");
-/* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! axios */ "./node_modules/axios/index.js");
-/* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(axios__WEBPACK_IMPORTED_MODULE_3__);
-/* harmony import */ var _routes_client__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./routes-client */ "./resources/js/routes-client.js");
-__webpack_require__(/*! ./bootstrap */ "./resources/js/bootstrap.js");
+/* harmony import */ var _routes_client__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./routes-client */ "./resources/js/routes-client.js");
+/* harmony import */ var _axios_config__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./axios-config */ "./resources/js/axios-config.js");
+/* harmony import */ var vue_axios__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! vue-axios */ "./node_modules/vue-axios/dist/vue-axios.esm.min.js");
+// resources/js/client-app.js
 
 
 
-// Import Axios
+
+// Axios unificado
 
 
-
-// Import and configure Vue Router
-
-
-// Create and mount the Vue app
 const app = (0,vue__WEBPACK_IMPORTED_MODULE_0__.createApp)(_components_client_ClientApp_vue__WEBPACK_IMPORTED_MODULE_1__["default"]);
-app.use(_routes_client__WEBPACK_IMPORTED_MODULE_4__["default"]);
-app.use(vue_axios__WEBPACK_IMPORTED_MODULE_2__["default"], (axios__WEBPACK_IMPORTED_MODULE_3___default()));
-app.mount('#client-app');
+app.use(_routes_client__WEBPACK_IMPORTED_MODULE_2__["default"]);
+app.use(vue_axios__WEBPACK_IMPORTED_MODULE_4__["default"], _axios_config__WEBPACK_IMPORTED_MODULE_3__["default"]);
+app.mount("#client-app");
 })();
 
 /******/ })()
