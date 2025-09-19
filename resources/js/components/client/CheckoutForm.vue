@@ -15,21 +15,31 @@
             <p class="mt-2">Procesando tu pedido...</p>
           </div>
           
-          <div v-else-if="orderCompleted" class="text-center py-4">
-            <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
-            <h5 class="text-success">¡Pedido completado con éxito!</h5>
-            <p>Tu número de pedido es: <strong>{{ orderNumber }}</strong></p>
-            <p>Tu pedido ha sido recibido y está siendo procesado.</p>
-            <p v-if="whatsappSent" class="mt-2">
-              <i class="fab fa-whatsapp text-success"></i> 
-              Hemos enviado un mensaje de WhatsApp al número proporcionado con los detalles de tu pedido.
-            </p>
-            <p v-else class="mt-2 text-muted small">
-              <i class="fas fa-info-circle"></i>
-              Nota: Para recibir mensajes de WhatsApp, asegúrate de enviar primero "join [código]" al número de WhatsApp de Twilio.
-            </p>
-            <button class="btn btn-brown mt-3" @click="closeModal">Continuar comprando</button>
-          </div>
+<div v-else-if="orderCompleted" class="text-center py-4">
+  <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+  <h5 class="text-success">¡Pedido completado con éxito!</h5>
+  <p>Tu número de pedido es: <strong>{{ orderNumber }}</strong></p>
+  <p>Tu pedido ha sido recibido y está siendo procesado.</p>
+  <p v-if="whatsappSent" class="mt-2">
+    <i class="fab fa-whatsapp text-success"></i> 
+    Hemos enviado un mensaje de WhatsApp al número proporcionado con los detalles de tu pedido.
+  </p>
+  <p v-else class="mt-2 text-muted small">
+    <i class="fas fa-info-circle"></i>
+    Nota: Para recibir mensajes de WhatsApp, asegúrate de enviar primero "join [código]" al número de WhatsApp de Twilio.
+  </p>
+
+  <!-- NUEVO: botones de acción -->
+  <div class="d-flex gap-2 justify-content-center mt-3">
+    <button class="btn btn-outline-secondary" @click="printInvoice" :disabled="!orderNumber">
+      Imprimir factura
+    </button>
+    <button class="btn btn-brown" @click="closeModal">
+      Continuar comprando
+    </button>
+  </div>
+</div>
+
           
           <div v-else>
             <div class="row">
@@ -121,6 +131,24 @@
                     </label>
                   </div>
                 </div>
+
+                <!-- NUEVO: Subida de comprobante si NO es efectivo -->
+                <div class="mb-3" v-if="formData.payment_method !== 'cash'">
+                  <label class="form-label">Comprobante (JPG, PNG o PDF, máx. 5MB)</label>
+                  <input
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.pdf"
+                    class="form-control"
+                    @change="onFile"
+                    :required="formData.payment_method !== 'cash'"
+                  />
+                  <small class="text-muted d-block mt-1">
+                    Al subir el comprobante, el sistema intentará confirmar tu pago automáticamente.
+                  </small>
+                  <div v-if="validationErrors.payment_proof" class="text-danger mt-1">
+                    {{ validationErrors.payment_proof }}
+                  </div>
+                </div>
                 
                 <div class="mb-3">
                   <label for="notes" class="form-label">Notas adicionales</label>
@@ -152,6 +180,15 @@
                 <span v-else>Confirmar pedido</span>
               </button>
             </div>
+
+            <!-- NUEVO: mensajes de error/éxito no intrusivos -->
+            <div v-if="submitError" class="alert alert-danger mt-3" role="alert">
+              {{ submitError }}
+            </div>
+            <div v-if="submitSuccess" class="alert alert-success mt-3" role="alert">
+              {{ submitSuccess }}
+            </div>
+            <!-- /NUEVO -->
           </div>
         </div>
       </div>
@@ -160,7 +197,7 @@
 </template>
   
 <script>
-import { ref, computed, watch } from 'vue';
+import { ref, watch } from 'vue';
 import axios from 'axios';
 
 export default {
@@ -190,14 +227,190 @@ export default {
     const isCheckoutOpen = ref(false);
     const selectedCountryCode = ref('+58'); // Código de país por defecto (Venezuela)
     const phoneNumber = ref(''); // Número de teléfono sin código de país
-    const whatsappSent = ref(false); // Añadido para controlar si se envió el mensaje de WhatsApp
+    const whatsappSent = ref(false);
+    // ---- Helpers de formato ----
+const fmtMoney = (n) =>
+  Number(n || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
+
+// Si orderNumber ya es el ID, puedes simplificar esto
+const resolvedOrderId = () => String(orderNumber.value || '').replace(/[^\d]/g, '') || orderNumber.value;
+
+// ---- Acción principal: imprimir factura ----
+const printInvoice = async () => {
+  try {
+    const id = resolvedOrderId();
+    if (!id) return;
+
+    // 1) Cargar detalles de la orden
+    const { data: order } = await axios.get(`/api/orders/${id}`);
+
+    // 2) Construir HTML de la factura
+    const html = buildInvoiceHTML(order);
+
+    // 3) Abrir nueva ventana e imprimir
+    const w = window.open('', '_blank', 'width=900,height=700');
+    if (!w) {
+      alert('Tu navegador bloqueó la ventana de impresión. Habilita pop-ups para continuar.');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    w.onload = () => {
+      w.focus();
+      w.print();
+      // w.close(); // opcional si quieres cerrar automáticamente
+    };
+  } catch (e) {
+    console.error('No se pudo imprimir la factura:', e);
+    alert('No se pudo generar la factura. Intenta nuevamente.');
+  }
+};
+
+// ---- Plantilla de HTML (puede ir como template string en el script) ----
+const buildInvoiceHTML = (order) => {
+  // Preparar ítems (ajusta si tus claves difieren)
+  const items = (order.items || order.order_items || []).map((it) => {
+    const name  = it.product?.name || it.name || `Producto #${it.product_id}`;
+    const qty   = it.quantity || 0;
+    const price = it.price || it.product?.price || 0;
+    const line  = qty * price;
+    return { name, qty, price, line };
+  });
+
+  const subtotal = items.reduce((s, x) => s + x.line, 0);
+  const taxRate  = 0.16; // mismo que CartService (IVA 16%) :contentReference[oaicite:1]{index=1}
+  const tax      = subtotal * taxRate;
+  const total    = subtotal + tax;
+
+  const invoiceNumber = order.id || order.order_id || '—';
+  const createdAt     = order.created_at ? new Date(order.created_at) : new Date();
+  const dateStr       = createdAt.toLocaleDateString() + ' ' + createdAt.toLocaleTimeString();
+
+  const customerName  = order.name || order.customer_name || '—';
+  const customerPhone = order.phone || order.customer_phone || '—';
+  const customerEmail = order.email || order.customer_email || '—';
+  const address       = order.shipping_address || order.address || '—';
+  const status        = (order.status || '').toUpperCase();
+
+  // A partir de aquí es puro HTML+CSS (sí, va aquí dentro como string)
+  return `<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"/>
+<title>Factura #${invoiceNumber}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<style>
+  :root{ --brown:#8B4513; --cream:#FFF8E7; --beige:#F5E6D3; --ink:#222; }
+  *{ box-sizing:border-box; } body{ font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial; color:var(--ink); margin:0; }
+  .invoice{ max-width:850px; margin:24px auto; padding:24px; border:1px solid #eee; border-radius:10px; }
+  .head{ display:flex; align-items:center; justify-content:space-between; gap:16px; }
+  .brand{ display:flex; align-items:center; gap:14px; }
+  .logo{ width:54px;height:54px;border-radius:12px;background:var(--brown);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:800; }
+  h1{ margin:0; font-size:22px; letter-spacing:.3px; }
+  .meta{ text-align:right; font-size:13px; color:#444; }
+  .badge{ display:inline-block; padding:3px 8px; border-radius:999px; background:var(--beige); color:var(--brown); font-weight:600; font-size:12px; }
+  .row{ display:flex; gap:24px; margin-top:18px; }
+  .card{ flex:1; background:var(--cream); border:1px solid #f0e6d8; border-radius:10px; padding:14px 16px; }
+  .card h3{ margin:0 0 8px; font-size:14px; color:#333; text-transform:uppercase; letter-spacing:.4px; }
+  table{ width:100%; border-collapse:collapse; margin-top:16px; }
+  th, td{ padding:10px 8px; text-align:left; border-bottom:1px solid #eee; font-size:14px; }
+  th{ background:#faf7f0; font-size:12px; text-transform:uppercase; color:#555; letter-spacing:.4px; }
+  .tright{ text-align:right; }
+  .totals{ max-width:340px; margin-left:auto; margin-top:12px; }
+  .totals .line{ display:flex; justify-content:space-between; padding:6px 0; }
+  .totals .grand{ font-weight:800; border-top:2px solid #eee; padding-top:10px; font-size:16px; }
+  .note{ margin-top:18px; font-size:12px; color:#666; }
+  .footer{ margin-top:20px; font-size:12px; color:#777; display:flex; justify-content:space-between; }
+  @media print{ .invoice{ border:none; margin:0; border-radius:0; } }
+</style>
+</head>
+<body>
+  <div class="invoice">
+    <div class="head">
+      <div class="brand">
+        <div class="logo">PO</div>
+        <div>
+          <h1>Panadería Orquídea de Oro</h1>
+          <div style="font-size:12px;color:#666">RIF: J-12345678-9 · +58 412-0000000 · Av. Principal, Valencia</div>
+        </div>
+      </div>
+      <div class="meta">
+        <div><strong>Factura #</strong> ${invoiceNumber}</div>
+        <div><strong>Fecha:</strong> ${dateStr}</div>
+        <div><span class="badge">Estado: ${status || '—'}</span></div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="card">
+        <h3>Cliente</h3>
+        <div><strong>${customerName}</strong></div>
+        <div>${address}</div>
+        <div>Tel: ${customerPhone}</div>
+        <div>Email: ${customerEmail}</div>
+      </div>
+      <div class="card">
+        <h3>Vendedor</h3>
+        <div><strong>Panadería Orquídea de Oro</strong></div>
+        <div>RIF: J-12345678-9</div>
+        <div>Whatsapp: +58 412-0000000</div>
+        <div>Dirección: Av. Principal, Valencia</div>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Producto</th>
+          <th class="tright">Cant.</th>
+          <th class="tright">Precio unit.</th>
+          <th class="tright">Importe</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.map(x => `
+          <tr>
+            <td>${x.name}</td>
+            <td class="tright">${x.qty}</td>
+            <td class="tright">${fmtMoney(x.price)}</td>
+            <td class="tright">${fmtMoney(x.line)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+
+    <div class="totals">
+      <div class="line"><span>Subtotal</span><span>${fmtMoney(subtotal)}</span></div>
+      <div class="line"><span>IVA (16%)</span><span>${fmtMoney(tax)}</span></div>
+      <div class="line grand"><span>Total</span><span>${fmtMoney(total)}</span></div>
+    </div>
+
+    <div class="note">* Gracias por su compra. Para máxima frescura, consumir el mismo día.</div>
+    <div class="footer">
+      <div>Atendido por: Sistema</div>
+      <div>Este documento es válido como comprobante de compra.</div>
+    </div>
+  </div>
+</body>
+</html>`;
+};
+
+
     const validationErrors = ref({
       name: '',
       email: '',
       phone: '',
       shipping_address: '',
-      terms: ''
+      terms: '',
+      // NUEVO
+      payment_proof: ''
+      // /NUEVO
     });
+
+    // NUEVO: archivo de comprobante y mensajes
+    const paymentFile = ref(null);
+    const submitError = ref('');
+    const submitSuccess = ref('');
+    // /NUEVO
     
     // Actualizar el número de teléfono completo cuando cambie el código de país o el número
     watch([selectedCountryCode, phoneNumber], () => {
@@ -222,29 +435,23 @@ export default {
     
     // Validar el número de teléfono según el país seleccionado
     const validatePhone = () => {
-      // Permitir que se mantenga el 0 inicial para números venezolanos
-      // pero eliminar otros caracteres no numéricos
+      // Permitir 0 inicial en VE; eliminar otros no numéricos
       phoneNumber.value = phoneNumber.value.replace(/[^\d0]/g, '');
       
       let isValid = false;
       let errorMessage = '';
       
-      // Validación específica según el código de país
       if (selectedCountryCode.value === '+58') {
-        // Venezuela: 10 dígitos (sin 0 inicial) o 11 dígitos (con 0 inicial)
         if (!phoneNumber.value) {
           errorMessage = 'El número de teléfono es requerido';
         } else if (phoneNumber.value.length === 10) {
-          // Número sin 0 inicial (ej: 4244423510)
           isValid = true;
         } else if (phoneNumber.value.length === 11 && phoneNumber.value.startsWith('0')) {
-          // Número con 0 inicial (ej: 04244423510)
           isValid = true;
         } else {
           errorMessage = 'El número debe tener 10 dígitos o 11 dígitos si comienza con 0';
         }
       } else if (selectedCountryCode.value === '+1') {
-        // Estados Unidos: 10 dígitos
         if (!phoneNumber.value) {
           errorMessage = 'El número de teléfono es requerido';
         } else if (phoneNumber.value.length !== 10) {
@@ -253,7 +460,6 @@ export default {
           isValid = true;
         }
       } else {
-        // Validación genérica para otros países: entre 8 y 15 dígitos
         if (!phoneNumber.value) {
           errorMessage = 'El número de teléfono es requerido';
         } else if (phoneNumber.value.length < 8 || phoneNumber.value.length > 15) {
@@ -271,7 +477,6 @@ export default {
     const validateForm = () => {
       let isValid = true;
       
-      // Validar nombre
       if (!formData.value.name) {
         validationErrors.value.name = 'El nombre es requerido';
         isValid = false;
@@ -279,17 +484,14 @@ export default {
         validationErrors.value.name = '';
       }
       
-      // Validar email
       if (!validateEmail()) {
         isValid = false;
       }
       
-      // Validar teléfono
       if (!validatePhone()) {
         isValid = false;
       }
       
-      // Validar dirección
       if (!formData.value.shipping_address) {
         validationErrors.value.shipping_address = 'La dirección de entrega es requerida';
         isValid = false;
@@ -297,44 +499,54 @@ export default {
         validationErrors.value.shipping_address = '';
       }
       
-      // Validar términos y condiciones
       if (!formData.value.termsAccepted) {
         validationErrors.value.terms = 'Debes aceptar los términos y condiciones';
         isValid = false;
       } else {
         validationErrors.value.terms = '';
       }
+
+      // NUEVO: si no es efectivo, exigir archivo
+      if (formData.value.payment_method !== 'cash' && !paymentFile.value) {
+        validationErrors.value.payment_proof = 'Debes adjuntar el comprobante (JPG, PNG o PDF).';
+        isValid = false;
+      } else {
+        validationErrors.value.payment_proof = '';
+      }
+      // /NUEVO
       
       return isValid;
     };
+
+    // NUEVO: handler de archivo
+    const onFile = (e) => {
+      paymentFile.value = e.target.files?.[0] || null;
+    };
+    // /NUEVO
     
     const submitOrder = async () => {
       loading.value = true;
+      submitError.value = '';
+      submitSuccess.value = '';
       
       try {
         console.log('Iniciando proceso de orden con datos:', formData.value);
         console.log('Carrito actual:', props.cart);
         
-        // Verificar que el carrito tenga items
         if (!props.cart.items || props.cart.items.length === 0) {
           throw new Error('El carrito está vacío');
         }
         
-        // Validar el formulario antes de enviar
         if (!validateForm()) {
           throw new Error('Por favor corrige los errores en el formulario');
         }
         
-        // Preparar los items del carrito para enviar al backend
         const cartItems = props.cart.items.map(item => ({
           product_id: item.product_id || (item.product && item.product.id),
           quantity: item.quantity,
           price: item.price
         }));
         
-        console.log('Items preparados para enviar:', cartItems);
-        
-        // Configurar opciones de Axios para mejor depuración
         const axiosConfig = {
           headers: {
             'Content-Type': 'application/json',
@@ -342,62 +554,67 @@ export default {
           }
         };
         
-        // Enviar la orden al backend
-        console.log('Enviando solicitud a /api/orders con datos:', {
-          ...formData.value,
-          cart_items: cartItems
-        });
-        
+        // 1) Crear la orden (awaiting_payment o cash_on_delivery)
         const response = await axios.post('/api/orders', {
           ...formData.value,
           cart_items: cartItems
         }, axiosConfig);
         
-        console.log('Respuesta del servidor:', response.data);
-        
-        // Marcar como completado
+        console.log('Respuesta /api/orders:', response.data);
+        const created = response.data || {};
+        const orderId = created.order_id || created.id;
+
+        // 2) AUTO-CONFIRMAR subiendo comprobante (si no es efectivo)
+        if (formData.value.payment_method !== 'cash') {
+          if (!paymentFile.value) {
+            throw new Error('Debes adjuntar el comprobante para este método de pago.');
+          }
+          const fd = new FormData();
+          fd.append('payment_proof', paymentFile.value);
+
+          const proofRes = await axios.post(`/api/orders/${orderId}/payment-proof`, fd, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+          console.log('Respuesta /payment-proof:', proofRes.data);
+
+          const finalStatus = proofRes?.data?.order_status || created?.status;
+          submitSuccess.value = finalStatus === 'paid'
+            ? '¡Pago confirmado! Tu orden ha sido procesada con éxito.'
+            : 'Comprobante recibido. Tu pago está en revisión.';
+        } else {
+          // Efectivo: flujo a WhatsApp/entrega
+          submitSuccess.value = 'Orden creada. Pagarás en efectivo al recibir tu pedido.';
+        }
+
+        // 3) Marcar como completado en UI
         orderCompleted.value = true;
-        orderNumber.value = response.data.order_id || response.data.order_number || response.data.id || 'N/A';
-        whatsappSent.value = response.data.whatsapp_sent || false;
+        orderNumber.value = created.order_id || created.order_number || created.id || 'N/A';
+        whatsappSent.value = created.whatsapp_sent || false;
         
-        // Emitir evento para que el componente padre sepa que la orden se completó
         emit('order-completed');
         
       } catch (error) {
         console.error('Error al procesar la orden:', error);
         
-        // Si es un error de validación local, no mostrar alerta
         if (error.message === 'Por favor corrige los errores en el formulario') {
-          console.warn('Errores de validación en el formulario:', validationErrors.value);
+          console.warn('Errores de validación:', validationErrors.value);
+          submitError.value = error.message;
           loading.value = false;
           return;
         }
         
-        // Mostrar información detallada del error
         if (error.response) {
-          // El servidor respondió con un código de estado fuera del rango 2xx
-          console.error('Respuesta del servidor con error:', error.response.data);
-          console.error('Código de estado:', error.response.status);
-          console.error('Encabezados:', error.response.headers);
-          
-          let errorMessage = 'Error del servidor: ';
-          if (error.response.data && error.response.data.message) {
-            errorMessage += error.response.data.message;
-          } else {
-            errorMessage += 'Código ' + error.response.status;
+          let msg = 'Error del servidor';
+          if (error.response.data?.message) {
+            msg = error.response.data.message;
+          } else if (error.response.status) {
+            msg += ` (código ${error.response.status})`;
           }
-          
-          // Mostrar el error en el modal en lugar de una alerta
-          orderCompleted.value = false;
-          alert(errorMessage); // Mantener esta alerta para errores, pero podríamos mejorarla en el futuro
+          submitError.value = msg;
         } else if (error.request) {
-          // La solicitud se realizó pero no se recibió respuesta
-          console.error('No se recibió respuesta del servidor:', error.request);
-          alert('No se pudo conectar con el servidor. Por favor, verifica tu conexión a internet.');
+          submitError.value = 'No se pudo conectar con el servidor. Verifica tu conexión.';
         } else {
-          // Algo ocurrió al configurar la solicitud que desencadenó un error
-          console.error('Error de configuración de la solicitud:', error.message);
-          alert('Error al procesar tu pedido: ' + error.message);
+          submitError.value = 'Error al procesar tu pedido: ' + error.message;
         }
       } finally {
         loading.value = false;
@@ -409,7 +626,6 @@ export default {
     };
     
     const closeModal = () => {
-      // Si la orden se completó, resetear el formulario
       if (orderCompleted.value) {
         formData.value = {
           name: '',
@@ -421,7 +637,6 @@ export default {
           termsAccepted: false
         };
         
-        // Resetear el estado
         orderCompleted.value = false;
         orderNumber.value = '';
         phoneNumber.value = '';
@@ -431,11 +646,15 @@ export default {
           email: '',
           phone: '',
           shipping_address: '',
-          terms: ''
+          terms: '',
+          payment_proof: '' // NUEVO
         };
+        // NUEVO
+        paymentFile.value = null;
+        submitError.value = '';
+        submitSuccess.value = '';
+        // /NUEVO
       }
-      
-      // Cerrar el modal
       isCheckoutOpen.value = false;
     };
     
@@ -449,10 +668,16 @@ export default {
       phoneNumber,
       whatsappSent,
       validationErrors,
-      validatePhone,
       submitOrder,
       openCheckoutModal,
-      closeModal
+      closeModal,
+      // NUEVO
+      onFile,
+      submitError,
+      submitSuccess,
+      printInvoice
+      // /NUEVO
+      
     };
   },
   
@@ -460,6 +685,7 @@ export default {
     openCheckoutModal() {
       this.isCheckoutOpen = true;
     }
+
   }
 };
 </script>
@@ -532,4 +758,8 @@ export default {
   color: #dc3545;
   font-size: 0.875rem;
 }
+
+/* NUEVO: estilos opcionales para alerts (si usas Bootstrap ya están) */
+.alert { margin-bottom: 0; }
+/* /NUEVO */
 </style>

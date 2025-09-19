@@ -215,253 +215,193 @@ class OrderController extends Controller
   /**
    * Crear una nueva orden
    */
-  public function store(Request $request)
-  {
-      \Log::info('OrderController@store - Request:', [
-          'data' => $request->all(),
-          'user_id' => auth()->id(),
-          'cart_id_cookie' => $request->cookie('cart_id')
-      ]);
-      
-      try {
-          // Validar los datos de la orden
-          $request->validate([
-              'name' => 'required|string|max:255',
-              'email' => 'required|email|max:255',
-              'phone' => 'required|string|max:20',
-              'shipping_address' => 'required|string',
-              'payment_method' => 'required|in:cash,card,transfer',
-          ]);
 
-          // Iniciar transacción
-          DB::beginTransaction();
-          
-          // Obtener el carrito actual usando el método existente
-          $cart = $this->getCart($request);
-          
-          if (!$cart) {
-              return response()->json([
-                  'success' => false,
-                  'message' => 'No se encontró un carrito válido'
-              ], 400);
-          }
-          
-          // Cargar los items del carrito
-          $cartItems = CartItem::with('product')
-              ->where('cart_id', $cart->id)
-              ->get();
-          
-          if ($cartItems->isEmpty()) {
-              return response()->json([
-                  'success' => false,
-                  'message' => 'El carrito está vacío'
-              ], 400);
-          }
-          
-          // Verificar stock disponible antes de procesar la orden
-          $stockErrors = [];
-          foreach ($cartItems as $item) {
-              $product = Product::find($item->product_id);
-              if (!$product) {
-                  $stockErrors[] = "El producto ya no está disponible.";
-                  continue;
-              }
-              
-              if ($product->stock < $item->quantity) {
-                  $stockErrors[] = "No hay suficiente stock para '{$product->name}'. Disponible: {$product->stock}, Solicitado: {$item->quantity}";
-              }
-          }
-          
-          if (!empty($stockErrors)) {
-              DB::rollBack();
-              return response()->json([
-                  'success' => false,
-                  'message' => 'Error de stock',
-                  'errors' => $stockErrors
-              ], 422);
-          }
-          
-          // Calcular el total de forma explícita
-          $total = 0;
-          foreach ($cartItems as $item) {
-              $total += $item->quantity * $item->price;
-          }
-          
-          // Crear la orden
-          $order = new Order();
-          $order->user_id = auth()->id();
-          $order->name = $request->name;
-          $order->email = $request->email;
-          $order->phone = $request->phone;
-          $order->shipping_address = $request->shipping_address;
-          $order->payment_method = $request->payment_method;
-          $order->notes = $request->notes;
-          $order->total = $total;
-          $order->status = 'pending';
-          $order->save();
-          
-          // Crear los items de la orden
-          foreach ($cartItems as $item) {
-              $orderItem = new OrderItem();
-              $orderItem->order_id = $order->id;
-              $orderItem->product_id = $item->product_id;
-              $orderItem->quantity = $item->quantity;
-              $orderItem->price = $item->price;
-              $orderItem->save();
+  // OrderController.php (store)
+public function store(Request $request)
+{
+    DB::beginTransaction();
 
-              // Actualizar el stock del producto
-              $product = Product::find($item->product_id);
-              if ($product) {
-                  // Asegurarse de que el stock no sea negativo
-                  $newStock = max(0, $product->stock - $item->quantity);
-                  $product->stock = $newStock;
-                  $product->save();
-                  
-                  \Log::info('Stock actualizado para producto', [
-                      'product_id' => $product->id,
-                      'previous_stock' => $product->stock + $item->quantity,
-                      'new_stock' => $product->stock,
-                      'quantity_ordered' => $item->quantity
-                  ]);
-              }
-          }
-          
-          // Marcar el carrito como completado
-          $cart->status = 'completed';
-          $cart->save();
-          
-          // Crear un nuevo carrito activo
-          $newCart = new Cart();
-          if (auth()->check()) {
-              $newCart->user_id = auth()->id();
-          }
-          $newCart->session_id = null;
-          $newCart->total = 0;
-          $newCart->status = 'active';
-          $newCart->save();
-          
-          \Log::info('Nuevo carrito activo creado después de la orden', [
-              'cart_id' => $newCart->id
-          ]);
-          
-          // Confirmar transacción
-          DB::commit();
-          
-          \Log::info('Orden creada correctamente:', ['order_id' => $order->id]);
-          
-          // Variable para indicar si se envió el mensaje de WhatsApp
-          $whatsappSent = false;
-          
-          // Preparar y enviar mensaje de WhatsApp
-          try {
-              // Registrar el número de teléfono que se usará
-              \Log::info('Preparando envío de WhatsApp', [
-                  'telefono' => $request->phone,
-                  'order_id' => $order->id
-              ]);
-              
-              // Crear un mensaje personalizado para la orden
-              $orderItems = '';
-              foreach ($cartItems as $item) {
-                  $orderItems .= "- " . $item->quantity . "x " . $item->product->name . "\n";
-              }
-              
-              // Formatear el método de pago para el mensaje
-              $paymentMethod = '';
-              switch ($request->payment_method) {
-                  case 'cash':
-                      $paymentMethod = 'Efectivo';
-                      break;
-                  case 'card':
-                      $paymentMethod = 'Tarjeta';
-                      break;
-                  case 'transfer':
-                      $paymentMethod = 'Transferencia';
-                      break;
-                  default:
-                      $paymentMethod = $request->payment_method;
-              }
-              
-              // Crear el mensaje personalizado
-              $whatsappMessage = "¡Gracias por tu compra en Panadería!\n\n" .
-                               "*Orden #" . $order->id . "*\n" .
-                               "Fecha: " . date('d/m/Y') . "\n" .
-                               "Cliente: " . $request->name . "\n" .
-                               "Total: $" . number_format($order->total, 2) . "\n" .
-                               "Método de pago: " . $paymentMethod . "\n\n" .
-                               "*Productos:*\n" . $orderItems . "\n" .
-                               "*Dirección de entrega:*\n" . $request->shipping_address . "\n\n" .
-                               "Tu pedido será procesado pronto. Para cualquier consulta, responde a este mensaje.";
-              
-              \Log::info('Mensaje de WhatsApp a enviar', [
-                  'mensaje' => $whatsappMessage
-              ]);
-              
-              // Intentar enviar primero con mensaje personalizado
-              $messageSid = $this->sendWhatsAppMessage($request->phone, $whatsappMessage);
-              
-              // Si falla, intentar con la plantilla como respaldo
-              if (!$messageSid) {
-                  \Log::warning('No se pudo enviar mensaje personalizado, intentando con plantilla');
-                  $messageSid = $this->sendWhatsAppTemplate($request->phone);
-              }
-              
-              // Registrar si se envió el mensaje
-              if ($messageSid) {
-                  \Log::info('Mensaje de WhatsApp enviado para la orden', [
-                      'order_id' => $order->id,
-                      'message_sid' => $messageSid
-                  ]);
-                  $whatsappSent = true;
-              } else {
-                  \Log::warning('No se pudo enviar el mensaje de WhatsApp', [
-                      'order_id' => $order->id
-                  ]);
-              }
-          } catch (\Exception $e) {
-              // Capturar cualquier error en el envío del mensaje, pero no afectar la creación de la orden
-              \Log::error('Excepción al enviar mensaje de WhatsApp: ' . $e->getMessage(), [
-                  'order_id' => $order->id,
-                  'exception_class' => get_class($e),
-                  'trace' => $e->getTraceAsString()
-              ]);
-          }
-          
-          // Establecer la cookie con el ID del nuevo carrito
-          $response = response()->json([
-              'success' => true,
-              'message' => 'Orden creada correctamente',
-              'order_id' => $order->id,
-              'whatsapp_sent' => $whatsappSent
-          ]);
-          
-          $response->cookie('cart_id', $newCart->id, 60 * 24 * 30);
-          
-          return $response;
-      } catch (\Illuminate\Validation\ValidationException $e) {
-          // Revertir transacción en caso de error de validación
-          DB::rollBack();
-          
-          // Registrar el error
-          \Log::error('Error de validación al crear orden: ' . json_encode($e->errors()));
-          
-          return response()->json([
-              'success' => false,
-              'message' => 'Error de validación',
-              'errors' => $e->errors()
-          ], 422);
-      } catch (\Exception $e) {
-          // Revertir transacción en caso de error
-          DB::rollBack();
-          
-          // Registrar el error
-          \Log::error('Error al crear orden: ' . $e->getMessage());
-          \Log::error('Stack trace: ' . $e->getTraceAsString());
-          
-          return response()->json([
-              'success' => false,
-              'message' => 'Error al crear la orden: ' . $e->getMessage()
-          ], 500);
-      }
-  }
+    // 1) Traer carrito + items
+    $cart = $this->getCart($request);
+    $cartItems = CartItem::with('product')->where('cart_id', $cart->id)->get();
+    if ($cartItems->isEmpty()) {
+        return response()->json(['success'=>false,'message'=>'El carrito está vacío'], 400);
+    }
+
+    // 2) Revalidar stock (actualmente ya lo haces así) :contentReference[oaicite:6]{index=6}
+    $stockErrors = [];
+    foreach ($cartItems as $item) {
+        $product = Product::find($item->product_id);
+        if (!$product) { $stockErrors[] = "El producto ya no está disponible."; continue; }
+        if ($product->stock < $item->quantity) {
+            $stockErrors[] = "No hay suficiente stock para '{$product->name}'. Disponible: {$product->stock}, Solicitado: {$item->quantity}";
+        }
+    }
+    if (!empty($stockErrors)) {
+        DB::rollBack();
+        return response()->json(['success'=>false,'message'=>'Error de stock','errors'=>$stockErrors], 422);
+    }
+
+    // 3) Calcular total (igual a como lo haces) :contentReference[oaicite:7]{index=7}
+    $total = 0;
+    foreach ($cartItems as $item) { $total += $item->quantity * $item->price; }
+
+    // 4) Crear orden en awaiting_payment (ANTES la creabas 'pending' y descontabas stock) :contentReference[oaicite:8]{index=8}
+    $order = new Order();
+    $order->user_id = auth()->id();
+    $order->name = $request->name;
+    $order->email = $request->email;
+    $order->phone = $request->phone;
+    $order->shipping_address = $request->shipping_address;
+    $order->payment_method = $request->payment_method; // cash|transfer|zelle|mobile
+    $order->notes = $request->notes;
+    $order->total = $total;
+    $order->status = $request->payment_method === 'cash' ? 'cash_on_delivery' : 'awaiting_payment';
+    $order->save();
+
+    // 5) Crear order_items (SIN tocar stock por ahora) :contentReference[oaicite:9]{index=9}
+    foreach ($cartItems as $ci) {
+        $orderItem = new OrderItem([
+          'order_id' => $order->id,
+          'product_id' => $ci->product_id,
+          'quantity' => $ci->quantity,
+          'price' => $ci->price,
+        ]);
+        $orderItem->save();
+    }
+
+    // 6) Marcar carrito como completed y crear otro (igual que hoy) :contentReference[oaicite:10]{index=10}
+    $cart->status = 'completed'; $cart->save();
+    $newCart = new Cart(); if (auth()->check()) { $newCart->user_id = auth()->id(); }
+    $newCart->session_id = null; $newCart->total = 0; $newCart->status = 'active'; $newCart->save();
+
+    DB::commit();
+
+    // 7) WhatsApp opcional (ya tienes el envío) — lo puedes conservar ajustando el texto según método. :contentReference[oaicite:11]{index=11}
+
+    return response()->json(['success'=>true,'order_id'=>$order->id,'status'=>$order->status], 201);
+}
+public function uploadPaymentProof(Request $request, $id)
+{
+    $request->validate([
+        'payment_proof' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120', // 5MB
+    ]);
+
+    $order = Order::findOrFail($id);
+    if (!in_array($order->status, ['awaiting_payment','cash_on_delivery'])) {
+        return response()->json(['success'=>false,'message'=>'La orden no admite comprobante en este estado'], 422);
+    }
+
+    $path = $request->file('payment_proof')->store('payment_proofs', 'public');
+    $order->payment_proof_path = $path;
+    // Si quieres: $order->status = 'awaiting_review';
+    $order->save();
+
+    return response()->json([
+        'success'=>true,
+        'message'=>'Comprobante recibido',
+        'payment_proof_url'=> asset('storage/'.$path),
+        'order_status'=>$order->status,
+    ]);
+}
+public function confirmPayment(Request $request, $id)
+{
+    // opcional: validar rol admin aquí si no usas middleware
+    DB::transaction(function () use ($id) {
+        $order = Order::lockForUpdate()->findOrFail($id);
+        if (!in_array($order->status, ['awaiting_payment','awaiting_review','cash_on_delivery'])) {
+            abort(422, 'Estado de orden inválido para confirmar pago.');
+        }
+
+        $items = OrderItem::where('order_id',$order->id)->get();
+
+        // Bloquea productos y descuenta stock aquí (esto estaba en store()) :contentReference[oaicite:13]{index=13}
+        $productIds = $items->pluck('product_id')->unique();
+        $products = Product::whereIn('id',$productIds)->lockForUpdate()->get()->keyBy('id');
+
+        foreach ($items as $it) {
+            $p = $products[$it->product_id] ?? null;
+            if (!$p) { abort(422, 'Producto de la orden no existe'); }
+            if ($p->stock < $it->quantity) {
+                abort(422, "Stock insuficiente para {$p->name}. Disponible: {$p->stock}");
+            }
+            $p->stock = max(0, $p->stock - $it->quantity);
+            $p->save();
+        }
+
+        $order->status = 'paid';
+        $order->payment_verified_at = now();
+        $order->save();
+    });
+
+    return response()->json(['success'=>true,'message'=>'Pago confirmado y stock descontado']);
+}
+private function confirmOrderInternally(int $orderId): void
+{
+    DB::transaction(function () use ($orderId) {
+        $order = Order::lockForUpdate()->findOrFail($orderId);
+        if (!in_array($order->status, ['awaiting_payment','awaiting_review'])) {
+            abort(422, 'Estado de orden inválido para confirmar pago.');
+        }
+
+        $items = OrderItem::where('order_id', $order->id)->get();
+        $productIds = $items->pluck('product_id')->unique();
+        $products = Product::whereIn('id',$productIds)->lockForUpdate()->get()->keyBy('id');
+
+        foreach ($items as $it) {
+            $p = $products[$it->product_id] ?? null;
+            if (!$p) abort(422, 'Producto no existe');
+            if ($p->stock < $it->quantity) {
+                abort(422, "Stock insuficiente para {$p->name}. Disponible: {$p->stock}");
+            }
+            $p->stock -= $it->quantity;
+            $p->save();
+        }
+
+        $order->status = 'paid';
+        $order->payment_verified_at = now();
+        $order->save();
+    });
+}
+public function getOrderDetails($id)
+    {
+        // Trae la orden y sus ítems con el producto (sin depender de relaciones en el modelo)
+        $order = Order::findOrFail($id);
+
+        $items = OrderItem::where('order_id', $order->id)
+            ->with('product') // si tu OrderItem tiene relation product()
+            ->get();
+
+        // Mapea a una estructura que el front espera para la factura
+        $payloadItems = $items->map(function ($it) {
+            $productName  = $it->product->name ?? ($it->name ?? ('Producto #'.$it->product_id));
+            $productPrice = $it->product->price ?? $it->price;
+
+            return [
+                'id'         => $it->id,
+                'product_id' => $it->product_id,
+                'name'       => $productName,
+                'quantity'   => (int) $it->quantity,
+                'price'      => (float) $it->price,       // precio unit. facturado
+                'product'    => [
+                    'id'    => $it->product->id ?? null,
+                    'name'  => $productName,
+                    'price' => (float) $productPrice,
+                ],
+            ];
+        })->values();
+
+        return response()->json([
+            'id'               => $order->id,
+            'created_at'       => $order->created_at,
+            'status'           => $order->status,
+            'name'             => $order->name,
+            'email'            => $order->email,
+            'phone'            => $order->phone,
+            'shipping_address' => $order->shipping_address,
+            'total'            => (float) $order->total,
+            'items'            => $payloadItems,
+        ]);
+    }
+
 }

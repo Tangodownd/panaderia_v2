@@ -87,4 +87,13 @@ class Product extends Model
     {
         return $query->where('stock', '>', 0);
     }
+    
+    public function availableStock(): int {
+    $reserved = \App\Models\StockReservation::where('product_id', $this->id)
+        ->where('status', 'reserved')
+        ->where('expires_at', '>', now())
+        ->sum('quantity');
+    return max(0, (int)$this->stock - (int)$reserved);
+    }
+
 }
