@@ -63,6 +63,7 @@ class ChatProcessController extends Controller
     {
         return match ($intent) {
             'CREATE_ORDER', 'ADD_TO_CART' => $this->handleAddToCart($entities),
+            'LIST_PRODUCTS'                => $this->handleListAvailableProducts($entities, $nlu), // <- NUEVO
             'CHECK_STOCK'                  => $this->handleCheckStock($entities),
             'RECOMMEND'                    => $this->handleRecommend(),
             'CONFIRM_ORDER'                => $this->handleConfirmOrder(),
@@ -582,4 +583,23 @@ private function extractStockQuery(array $entities, string $text): string
         $this->setStep('confirm_summary');
         return $this->summaryMessage()." ¿Confirmas tu pedido? (sí/no)";
     }
+private function handleListAvailableProducts(array $entities, array $nlu): string
+{
+    $total = \App\Models\Product::query()->inStock()->count();
+
+    // Ajusta si tu catálogo vive en otra ruta, p.ej. url('/productos') o url('/tienda')
+    $catalogUrl = url('/');
+
+    if ($total <= 0) {
+        return "Por ahora no tengo productos con stock. Si buscas algo en específico, dímelo y te confirmo en minutos.";
+    }
+
+    // Usa Markdown: el widget ya parsea [label](url) y mostrará solo “Aquí” clickeable.
+    return "Tenemos *{$total} productos* disponibles ahora mismo. 🛒\n"
+         . "Es más cómodo verlos en el catálogo: ({$catalogUrl})\n\n"
+         . "Si quieres, te digo la disponibilidad de un producto específico (ej.: *¿tienes pan canilla?*) o te muestro por categoría.";
+}
+
+
+
 }
