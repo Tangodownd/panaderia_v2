@@ -20,7 +20,10 @@ class Order extends Model
         'name',
         'email',
         'phone',
-        'notes'
+        'notes',
+        'payment_reference',
+        'payment_proof_path',
+        'payment_verified_at'
     ];
 
     /**

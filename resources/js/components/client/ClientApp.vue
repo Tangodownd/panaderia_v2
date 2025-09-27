@@ -3,7 +3,7 @@
     <nav class="navbar navbar-expand-lg navbar-light bg-cream border-bottom border-brown sticky-top shadow-sm">
       <div class="container">
         <a class="navbar-brand text-brown" href="#">
-            <i class="fas fa-bread-slice me-2"></i>Panadería Orquidea de Oro
+          <i class="fas fa-bread-slice me-2"></i>Panadería Orquidea de Oro
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
           <span class="navbar-toggler-icon"></span>
@@ -38,24 +38,23 @@
         </div>
       </div>
     </nav>
-    
+
     <main class="flex-grow-1">
       <router-view @add-to-cart="addToCart" />
     </main>
-    
+
     <footer class="bg-brown text-white py-4 mt-auto">
       <div class="container">
         <div class="row">
           <div class="col-md-4 mb-3 mb-md-0">
-              <h5 class="mb-3">Panadería Pasteleria Charcuteria Orquidea de Oro C.A</h5>
-              <p class="mb-1"><i class="fas fa-map-marker-alt me-2"></i> Centro Comercial Mega Mergado, Flor Amarillo, Valencia, Carabobo</p>
-              <p class="mb-1"><i class="fas fa-phone me-2"></i> +58 424 4133486</p>
-              <p class="mb-0"><i class="fas fa-envelope me-2"></i> kennytorres4444@gmail.com</p>
+            <h5 class="mb-3">Panadería Pasteleria Charcuteria Orquidea de Oro C.A</h5>
+            <p class="mb-1"><i class="fas fa-map-marker-alt me-2"></i> Centro Comercial Mega Mergado, Flor Amarillo, Valencia, Carabobo</p>
+            <p class="mb-1"><i class="fas fa-phone me-2"></i> +58 424 4133486</p>
+            <p class="mb-0"><i class="fas fa-envelope me-2"></i> kennytorres4444@gmail.com</p>
           </div>
           <div class="col-md-4 mb-3 mb-md-0">
             <h5 class="mb-3">Horario</h5>
-              <p class="mb-1">Lunes a Domingo: 6:00 AM - 9:00 PM</p>
-
+            <p class="mb-1">Lunes a Domingo: 6:00 AM - 9:00 PM</p>
           </div>
           <div class="col-md-4" id="contacto">
             <h5 class="mb-3">Contáctanos</h5>
@@ -70,216 +69,433 @@
         </div>
         <hr class="my-4 bg-light">
         <div class="text-center">
-            <p class="mb-0">&copy; {{ new Date().getFullYear() }} Panadería Orquidea de Oro. Todos los derechos reservados.</p>
+          <p class="mb-0">&copy; {{ new Date().getFullYear() }} Panadería Orquidea de Oro. Todos los derechos reservados.</p>
         </div>
       </div>
     </footer>
-    
-    <checkout-form 
-      :cart="cart" 
-      @order-completed="resetCart" 
+
+    <checkout-form
+      :cart="cart"
+      @order-completed="resetCart"
       ref="checkoutForm"
     />
+
+    <!-- === CHAT: FAB + Panel flotante (sin overlay) === -->
+    <button
+      class="chat-fab"
+      type="button"
+      @click="toggleChat"
+      :aria-expanded="chatOpen ? 'true' : 'false'"
+      aria-label="Abrir chat"
+    >
+      <i class="fas fa-comment-dots"></i>
+      <span v-if="unread > 0" class="badge">{{ unread }}</span>
+    </button>
+
+    <transition name="chat-fade">
+      <div v-if="chatOpen" class="chat-panel" role="dialog" aria-modal="true">
+        <div class="chat-header">
+          <div class="title">
+            <i class="fas fa-bread-slice me-2"></i> Asistente Orquídea de Oro
+          </div>
+          <button class="btn-close" type="button" @click="toggleChat" aria-label="Cerrar"></button>
+        </div>
+
+        <div class="chat-messages" ref="chatScroll">
+          <div
+            v-for="m in messages"
+            :key="m.id"
+            class="msg"
+            :class="m.role"
+          >
+            <span class="bubble">
+              <template v-for="(seg, i) in renderMessage(m.text ?? '')" :key="`${m.id}-${i}`">
+                <a v-if="seg.type === 'link'" :href="seg.href" target="_blank" rel="noopener noreferrer">{{ seg.label }}</a>
+                <span v-else>{{ seg.text }}</span>
+              </template>
+            </span>
+          </div>
+        </div>
+
+        <form class="chat-input" @submit.prevent="sendChat">
+          <input
+            v-model="text"
+            type="text"
+            placeholder="Escribe tu pedido..."
+            :disabled="sending"
+          />
+          <button class="btn-brown" type="submit" :disabled="sending || !text.trim()">
+            {{ sending ? '...' : 'Enviar' }}
+          </button>
+        </form>
+      </div>
+    </transition>
   </div>
 </template>
-  
+
 <script>
-import { ref, onMounted } from 'vue';
-import axios from 'axios';
-import ShoppingCart from './ShoppingCart.vue';
-import CheckoutForm from './CheckoutForm.vue';
+import { ref, onMounted } from 'vue'
+import ShoppingCart from './ShoppingCart.vue'
+import CheckoutForm from './CheckoutForm.vue'
+
+// clave de sesión del chat (sin depender de LocalStorage para abrir/cerrar, solo para session_id)
+const SID_KEY = 'chat_sid_v1'
 
 export default {
-  components: {
-    ShoppingCart,
-    CheckoutForm
+  name: 'ClientApp',
+  components: { ShoppingCart, CheckoutForm },
+
+  data () {
+    return {
+      // --- Estado del chat (versión que sí responde) ---
+      chatOpen: false,
+      sending: false,
+      text: '',
+      messages: [],
+      sid: localStorage.getItem(SID_KEY) || (crypto && crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
+      unread: 0,
+
+      // --- Estado existente ---
+      isChatOpen: false, // ya no se usa, pero lo dejamos por compatibilidad si algún hijo lo emite
+    }
   },
+
+  mounted () {
+    // Persistir session id
+    localStorage.setItem(SID_KEY, this.sid)
+
+      this._onCheckout = (ev) => {
+    try {
+      if (ev?.detail?.cart) {
+        this.cart = ev.detail.cart
+      }
+    } catch (_) {}
+    this.openCheckout()
+  }
+  document.addEventListener('checkout', this._onCheckout)
+
+  },
+  unmounted () {
+  if (this._onCheckout) {
+    document.removeEventListener('checkout', this._onCheckout)
+  }
+},
+
   
-  setup() {
-    const categories = ref([]);
-    const cart = ref({
-      items: [],
-      total: 0
-    });
-    const checkoutForm = ref(null);
-    const shoppingCart = ref(null);
-    
-    const fetchCategories = async () => {
-      try {
-        const response = await axios.get('/api/categories');
-        categories.value = response.data;
-      } catch (error) {
-        console.error('Error al cargar categorías:', error);
-        categories.value = [];
+  methods: {
+    // ===== CHAT methods =====
+    toggleChat () {
+      this.chatOpen = !this.chatOpen
+      if (this.chatOpen) {
+        this.unread = 0
+        this.$nextTick(() => this.scrollChatToBottom())
       }
-    };
-    
-    const fetchCart = async () => {
+    },
+    scrollChatToBottom () {
+      const el = this.$refs.chatScroll
+      if (el) el.scrollTop = el.scrollHeight
+    },
+    async sendChat () {
+      const t = this.text.trim()
+      if (!t) return
+      this.sending = true
+
+      // pinta mi mensaje
+      this.messages.push({ id: Date.now(), role: 'user', text: t })
+      this.text = ''
+
       try {
-        const response = await axios.get('/api/cart');
-        cart.value = response.data.cart;
-        cart.value.items = response.data.items;
-      } catch (error) {
-        console.error('Error al cargar el carrito:', error);
+        // Usa la instancia de Axios registrada con VueAxios (this.axios)
+        // ver registro en client-app.js donde se hace app.use(VueAxios, axios) 
+        const { data } = await this.axios.post('/api/chat/process', {
+          session_id: this.sid,
+          text: t
+        })
+        const reply = data?.reply || 'Entendido.'
+        this.messages.push({ id: Date.now() + 1, role: 'assistant', text: reply })
+        if (!this.chatOpen) this.unread++
+      } catch (e) {
+        this.messages.push({
+          id: Date.now() + 2,
+          role: 'assistant',
+          text: 'Hubo un problema al enviar tu mensaje. Inténtalo de nuevo.'
+        })
+        if (!this.chatOpen) this.unread++
+      } finally {
+        this.sending = false
+        this.$nextTick(() => this.scrollChatToBottom())
       }
-    };
-    
-    const addToCart = async ({ product, quantity }) => {
+    },
+    // === Enlazador de URLs ===
+    // Detecta URLs en un texto y las transforma en segmentos. Si es una factura, usa 'Descargar ahora' como etiqueta.
+    linkifySegments (raw) {
+      const text = String(raw ?? '')
+      const lines = text.split(/\r?\n/)
+      const urlRe = /(https?:\/\/[^\s)\]}]+[^\s)\]}.,;:!?])/gi
+      const out = []
+      lines.forEach((line, idx) => {
+        if (idx > 0) out.push({ type: 'text', text: '\n' })
+        let last = 0
+        let match
+        while ((match = urlRe.exec(line)) !== null) {
+          const url = match[0]
+          const start = match.index
+          const end = start + url.length
+          if (start > last) out.push({ type: 'text', text: line.slice(last, start) })
+          const isInvoice = /\/api\/orders\/\d+\/invoice(?:\?|$)/i.test(url) ||
+                            /\/orders\/\d+\/invoice(?:\?|$)/i.test(url) ||
+                            /\/invoice\.pdf(?:\?|$)/i.test(url)
+          out.push({ type: 'link', href: url, label: isInvoice ? 'Descargar ahora' : url })
+          last = end
+        }
+        if (last < line.length) out.push({ type: 'text', text: line.slice(last) })
+      })
+      return out
+    },
+    renderMessage (raw) {
+      return this.linkifySegments(raw)
+    },
+
+    // ===== Lógica existente (carrito, checkout) =====
+    async fetchCategories () {
       try {
-        // Usar el método del componente ShoppingCart
-        if (shoppingCart.value) {
-          await shoppingCart.value.addToCart(product, quantity);
-          
-          // Actualizar el carrito local
-          await fetchCart();
+        const { data } = await this.axios.get('/api/categories')
+        this.categories = data
+      } catch (error) {
+        console.error('Error al cargar categorías:', error)
+        this.categories = []
+      }
+    },
+    async fetchCart () {
+      try {
+        const { data } = await this.axios.get('/api/cart')
+        this.cart = data.cart
+        this.cart.items = data.items
+      } catch (error) {
+        console.error('Error al cargar el carrito:', error)
+      }
+    },
+    async addToCart ({ product, quantity }) {
+      try {
+        if (this.$refs.shoppingCart) {
+          await this.$refs.shoppingCart.addToCart(product, quantity)
+          await this.fetchCart()
         }
       } catch (error) {
-        console.error('Error al añadir producto al carrito:', error);
-        showNotification('Error al añadir producto al carrito', 'danger');
+        console.error('Error al añadir producto al carrito:', error)
+        this.showNotification('Error al añadir producto al carrito', 'danger')
       }
-    };
-    
-    const resetCart = async () => {
+    },
+    async resetCart () {
       try {
-        // Recargar el carrito después de completar la orden
-        await fetchCart();
-        
-        // Notificar al componente ShoppingCart
-        if (shoppingCart.value) {
-          shoppingCart.value.fetchCart();
+        await this.fetchCart()
+        if (this.$refs.shoppingCart) {
+          this.$refs.shoppingCart.fetchCart()
         }
-        
-        // Disparar evento para que otros componentes se actualicen
-        document.dispatchEvent(new Event('cart-updated'));
+        document.dispatchEvent(new Event('cart-updated'))
       } catch (error) {
-        console.error('Error al resetear el carrito:', error);
+        console.error('Error al resetear el carrito:', error)
       }
-    };
-    
-    const openCheckout = () => {
-      // Asegurarse de que no haya backdrops residuales
-      const backdrops = document.querySelectorAll('.modal-backdrop');
-      backdrops.forEach(backdrop => {
-        backdrop.remove();
-      });
-      
-      // Asegurarse de que el body no tenga la clase modal-open
-      document.body.classList.remove('modal-open');
-      document.body.style.overflow = '';
-      document.body.style.paddingRight = '';
-      
-      // Pequeño retraso para asegurar que todo esté limpio
+    },
+    openCheckout () {
+      // Dejamos que el modal del carrito se cierre solo;
+      // luego abrimos nuestro modal de checkout.
       setTimeout(() => {
-        if (checkoutForm.value) {
-          checkoutForm.value.openCheckoutModal();
+        if (this.$refs.checkoutForm) {
+          this.$refs.checkoutForm.openCheckoutModal()
         }
-      }, 100);
-    };
-    
-    const showNotification = (message, type = 'success') => {
-      // Crear un elemento de notificación
-      const notification = document.createElement('div');
-      notification.className = `toast align-items-center text-white bg-${type} border-0 position-fixed bottom-0 end-0 m-3`;
-      notification.setAttribute('role', 'alert');
-      notification.setAttribute('aria-live', 'assertive');
-      notification.setAttribute('aria-atomic', 'true');
-      
+      }, 250) // margen para la animación de Bootstrap
+    },
+
+    showNotification (message, type = 'success') {
+      const notification = document.createElement('div')
+      notification.className = `toast align-items-center text-white bg-${type} border-0 position-fixed bottom-0 end-0 m-3`
+      notification.setAttribute('role', 'alert')
+      notification.setAttribute('aria-live', 'assertive')
+      notification.setAttribute('aria-atomic', 'true')
       notification.innerHTML = `
         <div class="d-flex">
-          <div class="toast-body">
-            ${message}
-          </div>
+          <div class="toast-body">${message}</div>
           <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
         </div>
-      `;
-      
-      document.body.appendChild(notification);
-      
-      // Mostrar la notificación
+      `
+      document.body.appendChild(notification)
       if (typeof bootstrap !== 'undefined') {
-        const toast = new bootstrap.Toast(notification, { delay: 3000 });
-        toast.show();
+        const toast = new bootstrap.Toast(notification, { delay: 3000 })
+        toast.show()
       }
-      
-      // Eliminar la notificación después de ocultarse
       notification.addEventListener('hidden.bs.toast', function () {
-        document.body.removeChild(notification);
-      });
-    };
-    
+        document.body.removeChild(notification)
+      })
+    }
+  },
+
+  // Conservamos tu setup() original, pero migramos sus métodos a this.* para unificar Axios y refs
+  setup () {
+    const categories = ref([])
+    const cart = ref({ items: [], total: 0 })
+    const checkoutForm = ref(null)
+    const shoppingCart = ref(null)
+
     onMounted(() => {
-      fetchCategories();
-      fetchCart();
-      
-      // Escuchar eventos de checkout
-      document.addEventListener('checkout', (event) => {
-        if (event.detail && event.detail.cart) {
-          cart.value = event.detail.cart;
-          openCheckout();
-        }
-      });
-      
-      // Asegurarse de que bootstrap esté disponible
-      if (typeof bootstrap === 'undefined') {
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js';
-        script.onload = () => {
-          console.log('Bootstrap cargado dinámicamente');
-        };
-        document.head.appendChild(script);
-      }
-    });
-    
+      // Los fetch ahora viven como methods para usar this.axios; llamamos desde aquí
+      const vm = /** @type {any} */ (/** @type {unknown} */ null)
+      // Truco: onMounted de Composition no tiene this; mejor disparar eventos DOM para que mounted/created no dupliquen.
+    })
+
     return {
       categories,
       cart,
       checkoutForm,
-      shoppingCart,
-      addToCart,
-      resetCart,
-      openCheckout
-    };
+      shoppingCart
+    }
+  },
+
+  created () {
+    // Ejecutamos fetch usando methods (this.axios)
+    this.fetchCategories()
+    this.fetchCart()
+
+    // Cargar Bootstrap si falta
+    if (typeof bootstrap === 'undefined') {
+      const script = document.createElement('script')
+      script.src = 'https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js'
+      script.onload = () => console.log('Bootstrap cargado dinámicamente')
+      document.head.appendChild(script)
+    }
   }
-};
+}
 </script>
-  
+
 <style>
 body {
   background-color: #F5E6D3;
   color: #4A3728;
 }
-.bg-beige {
-  background-color: #F5E6D3;
-}
-.bg-cream {
-  background-color: #FFF8E7;
-}
-.text-brown {
-  color: #8B4513 !important;
-}
-.border-brown {
-  border-color: #8B4513 !important;
-}
-.btn-brown {
-  background-color: #8B4513;
-  border-color: #8B4513;
-  color: #FFF8E7;
-}
-.btn-brown:hover {
-  background-color: #6B3E0A;
-  border-color: #6B3E0A;
-  color: #FFF8E7;
-}
-.navbar-light .navbar-nav .nav-link {
-  color: rgba(75, 55, 40, 0.8);
-}
+.bg-beige { background-color: #F5E6D3; }
+.bg-cream { background-color: #FFF8E7; }
+.text-brown { color: #8B4513 !important; }
+.border-brown { border-color: #8B4513 !important; }
+.btn-brown { background-color: #8B4513; border-color: #8B4513; color: #FFF8E7; }
+.btn-brown:hover { background-color: #6B3E0A; border-color: #6B3E0A; color: #FFF8E7; }
+.navbar-light .navbar-nav .nav-link { color: rgba(75, 55, 40, 0.8); }
 .navbar-light .navbar-nav .nav-link:hover,
-.navbar-light .navbar-nav .nav-link.active {
-  color: #8B4513;
+.navbar-light .navbar-nav .nav-link.active { color: #8B4513; }
+:focus-visible { outline: 2px solid #8B4513 !important; outline-offset: 2px; }
+
+/* ===== CHAT styles (compacto y a juego con tu paleta) ===== */
+.chat-fab{
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  width: 56px;
+  height: 56px;
+  border: 0;
+  border-radius: 50%;
+  background: #8B4513;
+  color: #FFF8E7;
+  box-shadow: 0 6px 20px rgba(0,0,0,.25);
+  cursor: pointer;
+  z-index: 2147483000;
+  display: grid;
+  place-items: center;
 }
-:focus-visible {
-  outline: 2px solid #8B4513 !important;
-  outline-offset: 2px;
+.chat-fab .badge{
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #dc3545;
+  color: #fff;
+  border-radius: 999px;
+  padding: 2px 6px;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.chat-panel{
+  position: fixed;
+  right: 18px;
+  bottom: 84px;
+  width: 360px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: #FFF8E7;
+  border: 1px solid #8B4513;
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgba(0,0,0,.25);
+  z-index: 2147482999;
+  overflow: hidden;
+}
+
+.chat-header{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #F5E6D3;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+.chat-header .title{ font-weight: 600; color: #8B4513; }
+.chat-header .btn-close{
+  border: 0; background: transparent; font-size: 18px; line-height: 1;
+  color: #4A3728; opacity: .7; cursor: pointer;
+}
+.chat-header .btn-close::before{ content: '×'; }
+
+.chat-messages{
+  padding: 10px;
+  overflow-y: auto;
+  flex: 1;
+  background: #FFF8E7;
+}
+
+.msg{ display:flex; margin: 6px 0; }
+.msg.user{ justify-content: flex-end; }
+.msg.assistant{ justify-content: flex-start; }
+.bubble{
+  max-width: 78%;
+  padding: 8px 10px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.08);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.user .bubble{
+  background: #8B4513; color: #FFF8E7; border-bottom-right-radius: 4px;
+}
+.assistant .bubble{
+  background: #F5E6D3; color: #4A3728; border-bottom-left-radius: 4px; border: 1px solid rgba(0,0,0,.06);
+}
+
+/* Enlaces dentro de burbujas: se muestran en color marrón y con subrayado */
+.bubble a{
+  color: #7b4b2a;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  word-break: break-word;
+}
+
+.chat-input{
+  display:flex; gap: 8px; padding: 10px;
+  border-top: 1px solid rgba(0,0,0,.06); background: #FFF8E7;
+}
+.chat-input input{
+  flex:1; padding: 10px 12px; border: 1px solid #E3D6C4; border-radius: 10px; background: #fff; color: #4A3728;
+}
+.chat-input input:focus{ outline: 2px solid #8B4513; outline-offset: 1px; }
+
+.chat-fade-enter-active, .chat-fade-leave-active{
+  transition: opacity .18s ease, transform .18s ease;
+}
+.chat-fade-enter-from, .chat-fade-leave-to{
+  opacity: 0; transform: translateY(8px);
+}
+
+@media (max-width: 576px){
+  .chat-panel{
+    right: 12px; left: 12px; width: auto; bottom: 80px; max-height: 68vh;
+  }
 }
 </style>
-

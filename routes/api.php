@@ -12,7 +12,11 @@ use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\Api\ProductController as ApiProductController;
-use App\Http\Controllers\ChatCartController;
+use App\Http\Controllers\ChatProcessController;
+use App\Http\Controllers\TwilioWebhookController;
+use App\Http\Controllers\ChatMessagesController;
+
+
 
 /*
 |--------------------------------------------------------------------------
@@ -29,6 +33,10 @@ Route::get('/categories/{id}', [CategoryController::class, 'show']);
 
 Route::get('/products', [WebProductController::class, 'index']);
 Route::get('/products/{id}', [WebProductController::class, 'show']);
+
+Route::post('/webhooks/twilio/whatsapp', [TwilioWebhookController::class, 'incoming'])
+    ->middleware('twilio.verify')
+    ->name('webhooks.twilio.whatsapp');
 
 /*
 |--------------------------------------------------------------------------
@@ -66,10 +74,9 @@ Route::prefix('cart')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::prefix('chat')->group(function () {
-    Route::post('/cart/items', [ChatCartController::class, 'checkItems']); // valida stock real (lote)
-    Route::post('/orders/confirm', [ChatCartController::class, 'confirm']); // reserva + crea orden (TTL)
+    Route::post('/process', [ChatProcessController::class, 'process']);
 });
-
+Route::get('/chat/messages', [ChatMessagesController::class, 'index']);
 /*
 |--------------------------------------------------------------------------
 | Órdenes (público)
@@ -77,7 +84,8 @@ Route::prefix('chat')->group(function () {
 */
 Route::post('/orders', [OrderController::class, 'store']);
 Route::get('/orders/{id}', [OrderController::class, 'getOrderDetails']);
-
+Route::get('/orders/{id}/invoice', [OrderController::class, 'invoicePdf'])
+    ->name('orders.invoice.pdf');
 
 // Subida de comprobante (auto-confirma si NO es efectivo)
 Route::post('/orders/{id}/payment-proof', [OrderController::class, 'uploadPaymentProof']);
@@ -117,6 +125,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Admin
     Route::get('/admin/stats', [AdminController::class, 'getStats']);
     Route::get('/admin/orders/recent', [AdminController::class, 'getRecentOrders']);
+    Route::post('/orders/{id}/complete-cash', [OrderController::class, 'completeCashOrder']);
 
     // Solo administradores
     Route::middleware('admin')->group(function () {

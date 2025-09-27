@@ -29,7 +29,7 @@
           </div>
         </div>
       </div>
-      
+
       <div class="col-md-3 mb-3">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
@@ -50,7 +50,7 @@
           </div>
         </div>
       </div>
-      
+
       <div class="col-md-3 mb-3">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
@@ -65,11 +65,11 @@
             </div>
           </div>
           <div class="card-footer bg-transparent border-0">
-            <span class="text-muted">Funcionalidad no disponible</span>
+
           </div>
         </div>
       </div>
-      
+
       <div class="col-md-3 mb-3">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
@@ -111,10 +111,10 @@
             <ul v-else class="list-group list-group-flush">
               <li v-for="product in recentProducts" :key="product.id" class="list-group-item d-flex justify-content-between align-items-center">
                 <div class="d-flex align-items-center">
-                  <img 
-                    :src="getProductImage(product?.thumbnail)" 
-                    class="rounded me-3" 
-                    alt="Producto" 
+                  <img
+                    :src="getProductImage(product?.thumbnail)"
+                    class="rounded me-3"
+                    alt="Producto"
                     style="width: 40px; height: 40px; object-fit: cover;"
                     @error="handleImageError"
                   >
@@ -144,25 +144,57 @@
                 <span class="visually-hidden">Cargando...</span>
               </div>
             </div>
+
             <div v-else-if="recentOrders.length === 0" class="text-center py-3">
               <i class="fas fa-shopping-cart fa-3x text-muted mb-3"></i>
               <p class="text-muted mb-0">No hay pedidos recientes</p>
               <p class="text-muted small">Los pedidos aparecerán aquí cuando los clientes realicen compras</p>
             </div>
+
             <ul v-else class="list-group list-group-flush">
-              <li v-for="order in recentOrders" :key="order.id" class="list-group-item d-flex justify-content-between align-items-center">
+              <li
+                v-for="order in recentOrders"
+                :key="order.id"
+                class="list-group-item d-flex justify-content-between align-items-center"
+              >
                 <div>
-                  <h6 class="mb-0 text-brown">{{ order?.orderNumber || 'Sin número' }}</h6>
-                  <small class="text-muted">{{ formatDate(order?.date) }} - {{ order?.customer?.name || 'Cliente desconocido' }}</small>
+                  <h6 class="mb-0 text-brown">{{ displayOrderNumber(order) }}</h6>
+                  <small class="text-muted">
+                    {{ formatDate(order?.created_at || order?.date) }}
+                    &nbsp;–&nbsp;
+                    {{ displayCustomerName(order) }}
+                    <span v-if="order?.payment_method" class="ms-2">
+                      • {{ paymentMethodLabel(order.payment_method) }}
+                    </span>
+                    <span v-if="order?.total != null" class="ms-2">
+                      • {{ formatPrice(order.total) }}
+                    </span>
+                  </small>
                 </div>
-                <div>
-                  <span :class="getOrderStatusBadgeClass(order?.status)">{{ getOrderStatusText(order?.status) }}</span>
+
+                <div class="d-flex align-items-center gap-2">
+                  <span :class="badgeClassFromOrder(order)">
+                    {{ statusTextFromOrder(order) }}
+                  </span>
+
+                  <!-- Botón: completar efectivo -->
+                  <button
+                    v-if="canCompleteCash(order)"
+                    class="btn btn-sm btn-brown ms-2"
+                    :disabled="completingIds.has(order.id)"
+                    @click="completeCash(order)"
+                    title="Marcar como completado"
+                  >
+                    <span v-if="completingIds.has(order.id)" class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+                    Completar
+                  </button>
                 </div>
               </li>
             </ul>
           </div>
         </div>
       </div>
+
     </div>
   </div>
 </template>
@@ -179,28 +211,27 @@ export default {
       pendingOrders: 0,
       outOfStockProducts: 0
     });
-    
+
     const recentProducts = ref([]);
-    const recentOrders = ref([]);
-    
+    const recentOrders  = ref([]);
+
     const loading = reactive({
       stats: true,
       products: true,
       orders: true
     });
 
+    // ids que se están completando (para deshabilitar botón por orden)
+    const completingIds = ref(new Set());
+
+    // ---------- FETCHERS ----------
     const fetchStats = async () => {
       loading.stats = true;
       try {
-        const response = await axios.get('/api/admin/stats');
-        Object.assign(stats, response.data);
-      } catch (error) {
-        console.error('Error fetching stats:', error);
-        // Datos de ejemplo para demostración
-        stats.totalProducts = 24;
-        stats.totalCategories = 5;
-        stats.pendingOrders = 3;
-        stats.outOfStockProducts = 2;
+        const { data } = await axios.get('/api/admin/stats');
+        Object.assign(stats, data || {});
+      } catch (e) {
+        console.error('Error fetching stats:', e);
       } finally {
         loading.stats = false;
       }
@@ -209,24 +240,19 @@ export default {
     const fetchRecentProducts = async () => {
       loading.products = true;
       try {
-        const response = await axios.get('/api/products?limit=5');
-        
-        // Make sure we have valid data and properly map the fields
-        if (response.data && Array.isArray(response.data)) {
-          recentProducts.value = response.data
-            .filter(product => product && product.id)
-            .slice(0, 10)
-            .map(product => ({
-              id: product.id,
-              titulo: product.name || 'Sin título',
-              precio: product.price || 0,
-              thumbnail: product.image || null
-            }));
-        } else {
-          recentProducts.value = [];
-        }
-      } catch (error) {
-        console.error('Error fetching recent products:', error);
+        const { data } = await axios.get('/api/products?limit=5');
+        const arr = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+        recentProducts.value = arr
+          .filter(p => p && p.id)
+          .slice(0, 10)
+          .map(p => ({
+            id: p.id,
+            titulo: p.name || 'Sin título',
+            precio: Number(p.price || 0),
+            thumbnail: p.image || null
+          }));
+      } catch (e) {
+        console.error('Error fetching recent products:', e);
         recentProducts.value = [];
       } finally {
         loading.products = false;
@@ -236,88 +262,97 @@ export default {
     const fetchRecentOrders = async () => {
       loading.orders = true;
       try {
-        const response = await axios.get('/api/admin/orders/recent');
-        
-        // Check if the response data is valid and contains actual orders
-        if (response.data && Array.isArray(response.data)) {
-          // Use the data directly from the API
-          recentOrders.value = response.data;
-        } else {
-          // If no valid orders, set to empty array
-          recentOrders.value = [];
-        }
-      } catch (error) {
-        console.error('Error fetching recent orders:', error);
+        const { data } = await axios.get('/api/admin/orders/recent');
+        // Soporta [{..}] o { data: [{..}] }
+        const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+        recentOrders.value = list;
+
+        // Opcional: actualizar contador de pendientes con los estados del backend
+        const pendingLike = new Set(['pending', 'awaiting_payment', 'cash_on_delivery', 'awaiting_review']);
+        stats.pendingOrders = list.filter(o => pendingLike.has((o.status || '').toLowerCase())).length;
+      } catch (e) {
+        console.error('Error fetching recent orders:', e);
         recentOrders.value = [];
       } finally {
         loading.orders = false;
       }
     };
 
+    // ---------- HELPERS VISUALES ----------
     const getProductImage = (thumbnail) => {
       if (!thumbnail) {
-        console.log("No hay imagen disponible");
-        return 'data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%2240%22%20height%3D%2240%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2040%2040%22%20preserveAspectRatio%3D%22none%22%3E%3Cdefs%3E%3Cstyle%20type%3D%22text%2Fcss%22%3E%23holder_1%20text%20%7B%20fill%3A%23999%3Bfont-weight%3Anormal%3Bfont-family%3AArial%2C%20Helvetica%2C%20Open%20Sans%2C%20sans-serif%2C%20monospace%3Bfont-size%3A10pt%20%7D%20%3C%2Fstyle%3E%3C%2Fdefs%3E%3Cg%20id%3D%22holder_1%22%3E%3Crect%20width%3D%2240%22%20height%3D%2240%22%20fill%3D%22%23E9ECEF%22%3E%3C%2Frect%3E%3Cg%3E%3Ctext%20x%3D%2213%22%20y%3D%2220%22%3EN%2FA%3C%2Ftext%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E';
+        return 'data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%2240%22%20height%3D%2240%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2040%2040%22%20preserveAspectRatio%3D%22none%22%3E%3Crect%20width%3D%2240%22%20height%3D%2240%22%20fill%3D%22%23E9ECEF%22%2F%3E%3Ctext%20x%3D%2213%22%20y%3D%2222%22%20style%3D%22fill%3A%23999%3Bfont-size%3A10pt%3Bfont-family%3AArial%2C%20Helvetica%2C%20Open%20Sans%2C%20sans-serif%22%3EN%2FA%3C%2Ftext%3E%3C%2Fsvg%3E';
       }
-    
-      console.log("Ruta de imagen original:", thumbnail);
-    
-      // Check if the image is already a full URL
-      if (thumbnail.startsWith('http')) {
-        console.log("URL completa:", thumbnail);
-        return thumbnail;
-      }
-    
-      // If it's not a full URL, construct it based on the current origin
-      const fullUrl = `${window.location.origin}/storage/${thumbnail}`;
-      console.log("URL construida:", fullUrl);
-      return fullUrl;
-    };
-    
-    const handleImageError = (event) => {
-      console.error("Error al cargar imagen:", event.target.src);
-      // Use a data URI for the error image as well
-      event.target.src = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%2240%22%20height%3D%2240%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2040%2040%22%20preserveAspectRatio%3D%22none%22%3E%3Cdefs%3E%3Cstyle%20type%3D%22text%2Fcss%22%3E%23holder_1%20text%20%7B%20fill%3A%23721c24%3Bfont-weight%3Abold%3Bfont-family%3AArial%2C%20Helvetica%2C%20Open%20Sans%2C%20sans-serif%2C%20monospace%3Bfont-size%3A10pt%20%7D%20%3C%2Fstyle%3E%3C%2Fdefs%3E%3Cg%20id%3D%22holder_1%22%3E%3Crect%20width%3D%2240%22%20height%3D%2240%22%20fill%3D%22%23f8d7da%22%3E%3C%2Frect%3E%3Cg%3E%3Ctext%20x%3D%2213%22%20y%3D%2220%22%3EErr%3C%2Ftext%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E';
-    };
-    
-    const formatPrice = (price) => {
-      return `$${parseFloat(price).toFixed(2)}`;
+      if (String(thumbnail).startsWith('http')) return thumbnail;
+      return `${window.location.origin}/storage/${thumbnail}`;
     };
 
-    const formatDate = (dateString) => {
-      if (!dateString) return 'Fecha desconocida';
-      const date = new Date(dateString);
-      return date.toLocaleDateString();
+    const handleImageError = (e) => {
+      e.target.src =
+        'data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%2240%22%20height%3D%2240%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2040%2040%22%20preserveAspectRatio%3D%22none%22%3E%3Crect%20width%3D%2240%22%20height%3D%2240%22%20fill%3D%22%23f8d7da%22%2F%3E%3Ctext%20x%3D%2211%22%20y%3D%2222%22%20style%3D%22fill%3A%23721c24%3Bfont-weight%3Abold%3Bfont-size%3A10pt%3Bfont-family%3AArial%2C%20Helvetica%2C%20Open%20Sans%2C%20sans-serif%22%3EErr%3C%2Ftext%3E%3C%2Fsvg%3E';
+    };
+
+    const formatPrice = (price) => `$${Number(price || 0).toFixed(2)}`;
+    const formatDate  = (d) => (d ? new Date(d).toLocaleDateString() : 'Fecha desconocida');
+
+    // ---------- ORDEN: helpers de mapeo (flexibles con backend) ----------
+    const displayOrderNumber = (o) =>
+      o?.order_number || o?.orderNumber || o?.code || `ORD-${String(o?.id || '').padStart(4, '0')}`;
+
+    const displayCustomerName = (o) =>
+      o?.name || o?.customer_name || o?.customer?.name || 'Cliente desconocido';
+
+    const normalizeStatus = (statusRaw) => String(statusRaw || '').toLowerCase();
+
+    const paymentMethodLabel = (pm) => {
+      const m = String(pm || '').toLowerCase();
+      if (m === 'cash') return 'Efectivo';
+      if (m === 'transfer') return 'Transferencia';
+      if (m === 'zelle') return 'Zelle';
+      if (m === 'card') return 'Tarjeta';
+      if (m === 'mobile') return 'Pago móvil';
+      return '—';
     };
 
     const getOrderStatusBadgeClass = (status) => {
-      const classes = 'badge ';
-      if (!status) return classes + 'bg-secondary';
-      
-      switch (status) {
-        case 'pending':
-          return classes + 'bg-warning text-dark';
-        case 'processing':
-          return classes + 'bg-info text-dark';
+      // Mantengo tus clases .badge y colores
+      const base = 'badge ';
+      const s = normalizeStatus(status);
+
+      switch (s) {
+        case 'paid':
         case 'completed':
-          return classes + 'bg-success';
+          return base + 'bg-success';
+        case 'awaiting_payment':
+        case 'awaiting_review':
+        case 'processing':
+          return base + 'bg-info text-dark';
+        case 'cash_on_delivery':
+        case 'pending':
+          return base + 'bg-warning text-dark';
         case 'cancelled':
-          return classes + 'bg-danger';
+          return base + 'bg-danger';
         default:
-          return classes + 'bg-secondary';
+          return base + 'bg-secondary';
       }
     };
 
     const getOrderStatusText = (status) => {
-      if (!status) return 'Desconocido';
-      
-      switch (status) {
-        case 'pending':
-          return 'Pendiente';
-        case 'processing':
-          return 'Procesando';
+      const s = normalizeStatus(status);
+      switch (s) {
+        case 'paid':
         case 'completed':
           return 'Completado';
+        case 'awaiting_payment':
+          return 'En espera de pago';
+        case 'awaiting_review':
+          return 'En revisión';
+        case 'processing':
+          return 'Procesando';
+        case 'cash_on_delivery':
+          return 'Contra entrega';
+        case 'pending':
+          return 'Pendiente';
         case 'cancelled':
           return 'Cancelado';
         default:
@@ -325,34 +360,62 @@ export default {
       }
     };
 
-    onMounted(() => {
+    // Los dos de abajo aceptan tanto order.status* como status_label/badge del backend
+    const badgeClassFromOrder = (o) => o?.status_badge || getOrderStatusBadgeClass(o?.status);
+    const statusTextFromOrder = (o) => o?.status_label || getOrderStatusText(o?.status);
+
+    // ---------- ACCIÓN: completar órdenes en efectivo ----------
+    const canCompleteCash = (o) => {
+      const isCash = String(o?.payment_method || '').toLowerCase() === 'cash';
+      const s = normalizeStatus(o?.status);
+      return isCash && (s === 'cash_on_delivery' || s === 'pending');
+    };
+
+    const completeCash = async (o) => {
+      if (!o?.id) return;
+
+      // feedback rápido
+      completingIds.value.add(o.id);
       try {
-        fetchStats();
-        fetchRecentProducts();
-        fetchRecentOrders();
-      } catch (error) {
-        console.error('Error initializing dashboard:', error);
-        // Initialize with default values to prevent errors
-        stats.totalProducts = 0;
-        stats.totalCategories = 0;
-        stats.pendingOrders = 0;
-        stats.outOfStockProducts = 0;
-        recentProducts.value = [];
-        recentOrders.value = [];
+        await axios.post(`/api/orders/${o.id}/complete-cash`);
+        await fetchRecentOrders(); // refrescar lista
+      } catch (e) {
+        console.error('No se pudo completar la orden:', e);
+        alert('No se pudo completar la orden. Intenta nuevamente.');
+      } finally {
+        completingIds.value.delete(o.id);
       }
+    };
+
+    // ---------- INIT ----------
+    onMounted(async () => {
+      await Promise.all([fetchStats(), fetchRecentProducts(), fetchRecentOrders()]);
     });
 
     return {
+      // state
       stats,
       recentProducts,
       recentOrders,
       loading,
+      completingIds,
+
+      // helpers UI
       getProductImage,
       handleImageError,
       formatPrice,
       formatDate,
       getOrderStatusBadgeClass,
-      getOrderStatusText
+      getOrderStatusText,
+      badgeClassFromOrder,
+      statusTextFromOrder,
+      displayOrderNumber,
+      displayCustomerName,
+      paymentMethodLabel,
+
+      // actions
+      canCompleteCash,
+      completeCash
     };
   }
 };

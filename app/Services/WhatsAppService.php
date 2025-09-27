@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Twilio\Rest\Client;
+use App\Models\Order;
 use Illuminate\Support\Facades\Log;
 
 class WhatsAppService
@@ -40,5 +41,58 @@ class WhatsAppService
             
             throw $e;
         }
+    }
+    public function sendCustomMessage(string $to, string $body)
+{
+    try {
+        $to = 'whatsapp:+' . preg_replace('/[^0-9]/', '', $to);
+
+        $message = $this->client->messages->create($to, [
+            'from' => $this->fromNumber,
+            'body' => $body,
+        ]);
+
+        Log::info('WhatsApp enviado', [
+            'to' => $to,
+            'sid' => $message->sid,
+        ]);
+
+        return $message->sid;
+    } catch (\Exception $e) {
+        Log::error('Error WhatsApp', ['msg' => $e->getMessage()]);
+        return null;
+    }
+}
+
+public function sendPaymentVerifiedUnified(?string $phone, Order $order, string $method, ?string $reference, string $invoiceUrl): void
+    {
+        $pretty = match ($method) {
+            'pago_movil','pago movil','pago_móvil' => 'pago móvil',
+            'zelle'  => 'Zelle',
+            default  => 'transferencia'
+        };
+        $refTxt = $reference ? " (Ref: {$reference})" : '';
+
+        // Resumen rápido
+        $items = $order->items ?? $order->orderItems ?? []; // usa la rel que tengas
+        $lines = [];
+        foreach ($items as $it) {
+            $nm = $it->product->name ?? $it->name ?? ('Producto #'.$it->product_id);
+            $lines[] = "{$it->quantity} x {$nm}";
+        }
+        $summary = $lines ? implode(', ', $lines) : 'Sin detalle de ítems';
+        $total   = number_format((float)$order->total, 2, '.', ',');
+
+        $msg = "Hemos verificado tu {$pretty}{$refTxt}. ✅\n\n"
+             . "Resumen: {$summary}. Total: \${$total}.\n"
+             . "Nombre: {$order->name}\n"
+             . "Teléfono: {$order->phone}\n"
+             . "Dirección: {$order->shipping_address}\n"
+             . "Pago: {$method}{$refTxt}\n\n"
+             . "Aquí tienes tu factura digital: {$invoiceUrl}\n"
+             . "¿Deseas imprimirla?\n\n"
+             . "¡Pedido #{$order->id} creado! Te contactamos al {$order->phone}. ¡Gracias!";
+
+        $this->sendCustomMessage($phone, $msg);
     }
 }
