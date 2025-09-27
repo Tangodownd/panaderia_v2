@@ -96,4 +96,23 @@ class Product extends Model
     return max(0, (int)$this->stock - (int)$reserved);
     }
 
+// --- Scopes de ayuda para disponibilidad y búsqueda ---
+public function scopeAvailable($q)
+{
+    // Sin is_active: usamos tu scopeInStock() existente
+    return $q->inStock();
+}
+
+public function scopeSearchTerm($q, string $term)
+{
+    $t = trim($term);
+    if ($t === '') return $q;
+
+    return $q->where(function($qq) use ($t) {
+        $qq->where('name', 'like', "%{$t}%")
+           ->orWhere('description', 'like', "%{$t}%");
+        // Si en el futuro agregas 'aliases' (CSV/JSON), añade otro orWhere aquí.
+    });
+}
+
 }

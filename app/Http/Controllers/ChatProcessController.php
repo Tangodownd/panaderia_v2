@@ -463,10 +463,106 @@ Pago: {$pay}".(in_array($pay,['transferencia','pago_movil','zelle'])?" (Ref: {$r
         return "¡Listo! Añadí {$added} unidad(es) a tu carrito. ¿Deseas confirmar tu pedido o agregar algo más?";
     }
 
-    private function handleCheckStock(array $entities): string
-    {
-        return 'Puedes consultar disponibilidad preguntando por un producto específico.';
+private function handleCheckStock(array $entities): string
+{
+    // 1) Extraer el término
+    $text = trim((string) request()->input('text', ''));
+    $term = $this->extractStockQuery($entities, $text);
+
+    if ($term === '') {
+        return '¿De cuál producto quieres saber disponibilidad? Por ejemplo: *¿tienes pan canilla disponible?*';
     }
+
+    // 2) Búsqueda primaria: productos con stock > 0 que hagan match
+    $q = Product::query()
+        ->inStock() // usa tu scope existente
+        ->where(function ($qq) use ($term) {
+            $qq->where('name', 'like', "%{$term}%")
+               ->orWhere('description', 'like', "%{$term}%");
+        })
+        ->orderByDesc('updated_at')
+        ->limit(10);
+
+    $matches = $q->get(['id','name','stock','price']);
+
+    // 3) Si no hay resultados, relajar por tokens
+    if ($matches->isEmpty()) {
+        $pieces = array_filter(preg_split('~\s+~u', $term));
+        if (!empty($pieces)) {
+            $qq = Product::query()->inStock();
+            foreach ($pieces as $p) {
+                $p = trim($p);
+                if ($p === '') continue;
+                $qq->where('name', 'like', "%{$p}%");
+            }
+            $matches = $qq->orderByDesc('updated_at')
+                          ->limit(10)
+                          ->get(['id','name','stock','price']);
+        }
+    }
+
+    // 4) Respuesta
+    if ($matches->isEmpty()) {
+        return "No tengo coincidencias para *{$term}*. ¿Quieres que te muestre productos similares?";
+    }
+
+    $top = $matches->first();
+    $isClear = (mb_stripos($top->name ?? '', $term) !== false);
+
+    if ($isClear) {
+        $precio = number_format((float)($top->price ?? 0), 2, ',', '.');
+        return "Sí, *{$top->name}* está disponible.\nStock: *{$top->stock}* unidades\nPrecio: *{$precio}*";
+    }
+
+    $lines = [];
+    foreach ($matches->take(3) as $m) {
+        $precio = number_format((float)($m->price ?? 0), 2, ',', '.');
+        $lines[] = "• *{$m->name}* — stock: {$m->stock} unidades, precio: {$precio}";
+    }
+
+    return "Encontré estas opciones relacionadas con *{$term}*:\n"
+         . implode("\n", $lines)
+         . "\n\n¿Cuál te interesa?";
+}
+
+
+/**
+ * Normaliza el término para preguntas de disponibilidad.
+ * - Usa entities['query'] si viene, pero SIEMPRE limpia stops (hay, disponible, stock, etc.).
+ * - Si no viene, limpia el texto original.
+ */
+private function extractStockQuery(array $entities, string $text): string
+{
+    // 1) Punto de partida: entities.query > texto
+    $raw = trim((string)($entities['query'] ?? ''));
+    if ($raw === '') $raw = $text;
+
+    // 2) normalizar
+    $t = ' ' . mb_strtolower($raw) . ' ';
+    // quitar signos
+    $t = preg_replace('~[?¿¡!.,;:"]+~u', ' ', $t);
+    // quitar conectores tipo "de"
+    $t = preg_replace('~\bde(l|la|los|las)?\b~u', ' ', $t);
+
+    // 3) quitar palabras gatillo en cualquier posición
+    $triggers = [
+        'hay','tiene','tienes','tienen',
+        'disponible','disponibles',
+        'stock','queda','quedan','queda?','quedan?'
+    ];
+    $pattern = '~\b(' . implode('|', array_map('preg_quote', $triggers)) . ')\b~u';
+    $t = preg_replace($pattern, ' ', $t);
+
+    // 4) compactar espacios
+    $t = trim(preg_replace('~\s+~u', ' ', $t));
+
+    // 5) evitar términos vacíos o demasiado genéricos
+    if ($t === '' || mb_strlen($t) < 2) return '';
+
+    return $t;
+}
+
+
 
     private function handleRecommend(): string
     {

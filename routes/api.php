@@ -90,6 +90,8 @@ Route::get('/orders/{id}/invoice', [OrderController::class, 'invoicePdf'])
 // Subida de comprobante (auto-confirma si NO es efectivo)
 Route::post('/orders/{id}/payment-proof', [OrderController::class, 'uploadPaymentProof']);
 
+
+Route::get('/api/products/check-availability', [ProductController::class, 'checkAvailability']);
 /*
 |--------------------------------------------------------------------------
 | Rutas autenticadas (Sanctum)

@@ -139,4 +139,28 @@ class ProductController extends Controller
         
         return response()->json(null, 204);
     }
+public function checkAvailability(\Illuminate\Http\Request $req)
+{
+    $q = (string) $req->query('q', '');
+    if (trim($q) === '') {
+        return response()->json(['ok' => false, 'error' => 'q requerido'], 422);
+    }
+
+    $matches = \App\Models\Product::query()
+        ->inStock()
+        ->where(function($qq) use ($q) {
+            $qq->where('name', 'like', "%{$q}%")
+               ->orWhere('description', 'like', "%{$q}%");
+        })
+        ->orderByDesc('updated_at')
+        ->limit(10)
+        ->get(['id','name','stock','price']);
+
+    return response()->json([
+        'ok' => true,
+        'query' => $q,
+        'results' => $matches,
+    ]);
+}
+
 }
