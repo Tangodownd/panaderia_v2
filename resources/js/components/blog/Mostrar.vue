@@ -29,6 +29,18 @@
                 <option value="price">Precio</option>
               </select>
             </div>
+                  <div class="col-md-4">
+        <select
+          class="form-select bg-beige text-brown border-brown"
+          v-model="selectedStockFilter"
+          @change="onStockFilterChange"
+        >
+          <option value="all">Todos los productos</option>
+          <option value="in">Solo disponibles</option>
+          <option value="out">Solo agotados</option>
+        </select>
+      </div>
+
           </div>
           <div class="table-responsive">
             <table id="productsTable" class="table table-hover">
@@ -125,12 +137,13 @@
   
   <script>
   import { ref, computed, onMounted, nextTick, watch } from 'vue';
-  import { useRouter } from 'vue-router';
+  import { useRouter, useRoute } from 'vue-router';
   import axios from 'axios';
   
   export default {
   setup() {
     const router = useRouter();
+    const route = useRoute();
     const products = ref([]);
     const categories = ref([]);
     const searchQuery = ref('');
@@ -139,6 +152,7 @@
     const selectedProduct = ref({});
     const imageLoaded = ref(false);
     const imageError = ref(false);
+    const outOfStockOnly = ref(false);
   
     const getProductImage = (image) => {
     if (!image) {
@@ -172,7 +186,11 @@
         const matchesCategory = selectedCategory.value ? product.category_id == selectedCategory.value : true;
         const matchesSearch = product.name?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
                             (product.description && product.description.toLowerCase().includes(searchQuery.value.toLowerCase()));
-        return matchesCategory && matchesSearch;
+        const stockNum = Number(product.stock ?? 0);
+        let matchesStock = true;
+        if (selectedStockFilter.value === 'out') matchesStock = stockNum <= 0;
+        if (selectedStockFilter.value === 'in')  matchesStock = stockNum > 0;
+        return matchesCategory && matchesSearch && matchesStock;
       });
   
       if (sortBy.value) {
@@ -227,6 +245,22 @@
         }
       }
     };
+    const selectedStockFilter = ref('all'); // 'all' | 'in' | 'out'
+
+const onStockFilterChange = () => {
+  // sincronizar con el query de la ruta
+  const newQuery = { ...route.query };
+  if (selectedStockFilter.value === 'out') {
+    newQuery.filter = 'out-of-stock';
+    outOfStockOnly.value = true;
+  } else {
+    // quitar el query si no es "agotados"
+    delete newQuery.filter;
+    outOfStockOnly.value = (selectedStockFilter.value === 'out');
+  }
+  router.replace({ query: newQuery });
+};
+
   
     const verDetalles = (index) => {
       selectedProduct.value = JSON.parse(JSON.stringify(filteredProducts.value[index]));
@@ -250,8 +284,17 @@
   
     onMounted(async () => {
     try {
-      await mostrarProductos();
-      await fetchCategories();
+    await mostrarProductos();
+    await fetchCategories();
+ const fromQuery = String(route.query.filter || '');
+    if (fromQuery === 'out-of-stock') {
+      selectedStockFilter.value = 'out';
+      outOfStockOnly.value = true;
+    } else {
+      selectedStockFilter.value = 'all';
+      outOfStockOnly.value = false;
+    }
+
     } catch (error) {
       console.error('Error during component initialization:', error);
       // Initialize with empty arrays to prevent further errors
@@ -259,7 +302,19 @@
       categories.value = [];
     }
   });
-  
+    // si navegan de nuevo a esta misma ruta con otro query, actualizar
+watch(() => route.query.filter, (val) => {
+  const tag = String(val || '');
+  if (tag === 'out-of-stock') {
+    selectedStockFilter.value = 'out';
+    outOfStockOnly.value = true;
+  } else {
+    selectedStockFilter.value = 'all';
+    outOfStockOnly.value = false;
+  }
+});
+
+
     return {
       products,
       categories,
@@ -270,6 +325,9 @@
       imageLoaded,
       imageError,
       filteredProducts,
+      selectedStockFilter,
+      outOfStockOnly,
+      onStockFilterChange,
       getProductImage,
       handleImageError,
       handleImageLoad,

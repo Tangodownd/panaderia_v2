@@ -279,9 +279,7 @@ export default {
         const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
         recentOrders.value = list;
 
-        // Opcional: actualizar contador de pendientes con los estados del backend
-        const pendingLike = new Set(['pending', 'awaiting_payment', 'cash_on_delivery', 'awaiting_review']);
-        stats.pendingOrders = list.filter(o => pendingLike.has((o.status || '').toLowerCase())).length;
+      
       } catch (e) {
         console.error('Error fetching recent orders:', e);
         recentOrders.value = [];
