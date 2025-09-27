@@ -380,7 +380,7 @@ export default {
     const canCompleteCash = (o) => {
       const isCash = String(o?.payment_method || '').toLowerCase() === 'cash';
       const s = normalizeStatus(o?.status);
-      return isCash && (s === 'cash_on_delivery' || s === 'pending');
+      return (s === 'cash_on_delivery' || s === 'pending');
     };
 
     const completeCash = async (o) => {

@@ -98,7 +98,7 @@ Route::get('/api/products/check-availability', [ProductController::class, 'check
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:sanctum')->group(function () {
-
+    
     // Sesión
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', function (Request $request) {

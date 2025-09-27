@@ -554,38 +554,39 @@ class OrderController extends Controller
     }
 
     // === Completar orden en efectivo ===
-    public function completeCashOrder(Request $request, int $id)
-    {
-        DB::transaction(function () use ($id) {
-            $order = Order::lockForUpdate()->findOrFail($id);
+public function completeCashOrder(Request $request, int $id)
+{
+    DB::transaction(function () use ($id) {
+        $order = Order::lockForUpdate()->findOrFail($id);
 
-            if ($order->status !== 'cash_on_delivery') {
-                abort(422, 'Solo puedes completar órdenes con método Efectivo.');
+        if (!in_array($order->status, ['cash_on_delivery', 'pending'])) {
+            abort(422, 'Solo puedes completar órdenes en efectivo o pendientes.');
+        }
+
+        $items = OrderItem::where('order_id', $order->id)->get();
+
+        $productIds = $items->pluck('product_id')->unique();
+        $products   = Product::whereIn('id', $productIds)
+                        ->lockForUpdate()->get()->keyBy('id');
+
+        foreach ($items as $it) {
+            $p = $products[$it->product_id] ?? null;
+            if (!$p) abort(422, 'Producto de la orden no existe');
+            if ($p->stock < $it->quantity) {
+                abort(422, "Stock insuficiente para {$p->name}. Disponible: {$p->stock}");
             }
+            $p->stock = max(0, $p->stock - $it->quantity);
+            $p->save();
+        }
 
-            $items = OrderItem::where('order_id', $order->id)->get();
+        $order->status = 'paid';
+        $order->payment_verified_at = now();
+        $order->save();
+    });
 
-            $productIds = $items->pluck('product_id')->unique();
-            $products   = Product::whereIn('id', $productIds)
-                            ->lockForUpdate()->get()->keyBy('id');
+    return response()->json(['success' => true, 'message' => 'Orden marcada como completada.']);
+}
 
-            foreach ($items as $it) {
-                $p = $products[$it->product_id] ?? null;
-                if (!$p) abort(422, 'Producto de la orden no existe');
-                if ($p->stock < $it->quantity) {
-                    abort(422, "Stock insuficiente para {$p->name}. Disponible: {$p->stock}");
-                }
-                $p->stock = max(0, $p->stock - $it->quantity);
-                $p->save();
-            }
-
-            $order->status = 'paid';
-            $order->payment_verified_at = now();
-            $order->save();
-        });
-
-        return response()->json(['success' => true, 'message' => 'Orden en efectivo marcada como completada.']);
-    }
 
     public function invoicePdf($id)
     {

@@ -32,6 +32,11 @@
                 <i class="fas fa-users-cog me-1"></i> Administradores
               </router-link>
             </li>
+            <li class="nav-item">
+              <router-link :to="{ name: 'adminOrders' }" class="nav-link" active-class="active">
+                <i class="fas fa-shopping-cart me-1"></i> Órdenes
+              </router-link>
+            </li>
           </ul>
           <div class="d-flex">
             <div class="dropdown">

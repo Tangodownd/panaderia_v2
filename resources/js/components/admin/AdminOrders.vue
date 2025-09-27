@@ -44,22 +44,34 @@
                   <th style="width: 150px;">Pago</th>
                   <th style="width: 140px;">Estado</th>
                   <th style="width: 170px;">Fecha</th>
-                  <th style="width: 120px;">Acciones</th>
+                  <th style="width: 200px;">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="o in orders" :key="o.id">
                   <td class="text-brown fw-semibold">{{ o.code || ('ORD-' + String(o.id).padStart(4,'0')) }}</td>
                   <td>{{ o.customer_name || '—' }}</td>
-                  <td>\${{ Number(o.total || 0).toFixed(2) }}</td>
+                  <td>${{ Number(o.total || 0).toFixed(2) }}</td>
                   <td>{{ paymentMethod(o.payment_method) }}</td>
                   <td>
                     <span :class="badgeClass(o.status_badge)">{{ o.status_label }}</span>
                   </td>
                   <td>{{ formatDate(o.created_at) }}</td>
-                  <td>
+                  <td class="d-flex gap-2">
                     <button class="btn btn-sm btn-outline-brown" @click="openDetails(o)">
                       Ver detalles
+                    </button>
+                    <button
+                      v-if="canComplete(o)"
+                      class="btn btn-sm btn-brown"
+                      :disabled="completingIds.has(o.id)"
+                      @click="completeOrder(o)"
+                    >
+                      <span
+                        v-if="completingIds.has(o.id)"
+                        class="spinner-border spinner-border-sm me-1"
+                      ></span>
+                      Completar
                     </button>
                   </td>
                 </tr>
@@ -86,59 +98,68 @@
       </div>
     </div>
 
-    <!-- Modal Detalles -->
-    <div class="modal fade" ref="detailsModal" tabindex="-1">
-      <div class="modal-dialog modal-lg modal-dialog-scrollable">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title text-brown">Detalle del pedido {{ selected?.code || ('ORD-' + String(selected?.id||'').padStart(4,'0')) }}</h5>
-            <button type="button" class="btn-close" @click="hideModal()"></button>
-          </div>
-          <div class="modal-body">
-            <div v-if="detailsLoading" class="text-center py-3">
-              <div class="spinner-border text-brown"></div>
+    <!-- Modal Detalles (Vue controlled) -->
+    <div v-if="showDetails">
+      <div class="modal fade show" style="display:block;" tabindex="-1" role="dialog" aria-modal="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title text-brown">
+                Detalle del pedido {{ selected?.code || ('ORD-' + String(selected?.id||'').padStart(4,'0')) }}
+              </h5>
+              <button type="button" class="btn-close" @click="hideModal()"></button>
             </div>
-            <template v-else-if="orderDetails">
-              <div class="mb-3">
-                <strong>Cliente:</strong> {{ orderDetails.name }}<br>
-                <strong>Teléfono:</strong> {{ orderDetails.phone }}<br>
-                <strong>Dirección:</strong> {{ orderDetails.shipping_address || '—' }}
+
+            <div class="modal-body">
+              <div v-if="detailsLoading" class="text-center py-3">
+                <div class="spinner-border text-brown"></div>
               </div>
 
-              <div class="table-responsive">
-                <table class="table">
-                  <thead>
-                    <tr>
-                      <th>Producto</th>
-                      <th style="width: 100px;">Cant.</th>
-                      <th style="width: 120px;">Precio</th>
-                      <th style="width: 120px;">Subtotal</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="it in orderDetails.items" :key="it.id">
-                      <td>{{ it.name }}</td>
-                      <td>{{ it.quantity }}</td>
-                      <td>\${{ Number(it.price || it.unit_price || 0).toFixed(2) }}</td>
-                      <td>\${{ (Number(it.price || it.unit_price || 0) * Number(it.quantity||0)).toFixed(2) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+              <template v-else-if="orderDetails">
+                <div class="mb-3">
+                  <strong>Cliente:</strong> {{ orderDetails.name }}<br>
+                  <strong>Teléfono:</strong> {{ orderDetails.phone }}<br>
+                  <strong>Dirección:</strong> {{ orderDetails.shipping_address || '—' }}
+                </div>
 
-              <div class="d-flex justify-content-end">
-                <h5 class="mb-0">Total: <span class="text-brown">\${{ Number(orderDetails.total || 0).toFixed(2) }}</span></h5>
-              </div>
-            </template>
-            <div v-else class="text-muted">No se pudo cargar el detalle.</div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-outline-brown" @click="hideModal()">Cerrar</button>
+                <div class="table-responsive">
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th>Producto</th>
+                        <th style="width: 100px;">Cant.</th>
+                        <th style="width: 120px;">Precio</th>
+                        <th style="width: 120px;">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="it in orderDetails.items" :key="it.id">
+                        <td>{{ it.name }}</td>
+                        <td>{{ it.quantity }}</td>
+                        <td>${{ Number(it.price || it.unit_price || 0).toFixed(2) }}</td>
+                        <td>${{ (Number(it.price || it.unit_price || 0) * Number(it.quantity||0)).toFixed(2) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="d-flex justify-content-end">
+                  <h5 class="mb-0">Total: <span class="text-brown">${{ Number(orderDetails.total || 0).toFixed(2) }}</span></h5>
+                </div>
+              </template>
+
+              <div v-else class="text-muted">No se pudo cargar el detalle.</div>
+            </div>
+
+            <div class="modal-footer">
+              <button class="btn btn-outline-brown" @click="hideModal()">Cerrar</button>
+            </div>
           </div>
         </div>
       </div>
+      <!-- backdrop -->
+      <div class="modal-backdrop fade show"></div>
     </div>
-
   </div>
 </template>
 
@@ -148,7 +169,7 @@ import { onMounted, reactive, ref } from 'vue';
 
 export default {
   name: 'AdminOrders',
-  setup(_, { attrs }) {
+  setup() {
     const loading = ref(true);
     const orders  = ref([]);
     const meta    = reactive({ current_page: 1, last_page: 1, total: 0, per_page: 20 });
@@ -157,11 +178,13 @@ export default {
       status: new URLSearchParams(window.location.search).get('status') || ''
     });
 
+    const completingIds = ref(new Set());
+
     // Detalles
     const selected       = ref(null);
     const orderDetails   = ref(null);
     const detailsLoading = ref(false);
-    const detailsModal   = ref(null);
+    const showDetails    = ref(false);
 
     const formatDate = (d) => (d ? new Date(d).toLocaleString() : '—');
     const paymentMethod = (pm) => {
@@ -204,7 +227,7 @@ export default {
       selected.value = o;
       orderDetails.value = null;
       detailsLoading.value = true;
-      showModal();
+      showDetails.value = true;
 
       try {
         const { data } = await axios.get(`/api/orders/${o.id}`);
@@ -216,13 +239,29 @@ export default {
       }
     };
 
-    const showModal = () => {
-      if (!detailsModal.value) {
-        detailsModal.value = new bootstrap.Modal(document.querySelector('.modal'), { backdrop: 'static' });
-      }
-      detailsModal.value.show();
+    const hideModal = () => {
+      showDetails.value = false;
     };
-    const hideModal = () => detailsModal.value?.hide();
+
+    // Permitir completar cash_on_delivery y pending
+    const canComplete = (o) => {
+      const s = String(o?.status || '').toLowerCase();
+      return s === 'cash_on_delivery' || s === 'pending';
+    };
+
+    const completeOrder = async (o) => {
+      if (!o?.id) return;
+      completingIds.value.add(o.id);
+      try {
+        await axios.post(`/api/orders/${o.id}/complete-cash`);
+        await load(meta.current_page); // refresca lista actual
+      } catch (e) {
+        console.error('No se pudo completar la orden:', e);
+        alert('No se pudo completar la orden. Intenta nuevamente.');
+      } finally {
+        completingIds.value.delete(o.id);
+      }
+    };
 
     onMounted(() => load());
 
@@ -231,7 +270,8 @@ export default {
       formatDate, paymentMethod, badgeClass,
       go, load,
       selected, orderDetails, openDetails,
-      detailsLoading, detailsModal, hideModal
+      detailsLoading, showDetails, hideModal,
+      completingIds, canComplete, completeOrder
     };
   }
 }
