@@ -51,24 +51,29 @@
         </div>
       </div>
 
-      <div class="col-md-3 mb-3">
-        <div class="card border-0 shadow-sm h-100">
-          <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center">
-              <div>
-                <h6 class="text-muted mb-1">Pedidos Pendientes</h6>
-                <h3 class="text-brown mb-0">{{ stats.pendingOrders }}</h3>
-              </div>
-              <div class="bg-light-brown rounded-circle p-3">
-                <i class="fas fa-shopping-cart fa-2x text-white"></i>
-              </div>
-            </div>
-          </div>
-          <div class="card-footer bg-transparent border-0">
-
-          </div>
+<!-- Pedidos Pendientes -->
+<div class="col-md-3 mb-3">
+  <div class="card border-0 shadow-sm h-100">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <h6 class="text-muted mb-1">Pedidos Pendientes</h6>
+          <h3 class="text-brown mb-0">{{ stats.pendingOrders }}</h3>
+        </div>
+        <div class="bg-light-brown rounded-circle p-3">
+          <i class="fas fa-shopping-cart fa-2x text-white"></i>
         </div>
       </div>
+    </div>
+    <div class="card-footer bg-transparent border-0">
+      <!-- NUEVO: Ver todos (filtrados a pendientes) -->
+      <router-link :to="{ name: 'adminOrders', query: { status: 'pending' } }" class="text-brown text-decoration-none">
+        Ver todos <i class="fas fa-arrow-right ms-1"></i>
+      </router-link>
+    </div>
+  </div>
+</div>
+
 
       <div class="col-md-3 mb-3">
         <div class="card border-0 shadow-sm h-100">
@@ -139,6 +144,13 @@
             <h5 class="mb-0">Pedidos Recientes</h5>
           </div>
           <div class="card-body">
+            <div class="card-footer bg-transparent border-0">
+  <!-- NUEVO: Ver todos (sin filtro) -->
+  <router-link :to="{ name: 'adminOrders' }" class="text-brown text-decoration-none">
+    Ver todos <i class="fas fa-arrow-right ms-1"></i>
+  </router-link>
+</div>
+
             <div v-if="loading.orders" class="text-center py-3">
               <div class="spinner-border text-brown" role="status">
                 <span class="visually-hidden">Cargando...</span>

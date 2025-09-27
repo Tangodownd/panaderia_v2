@@ -60,4 +60,64 @@ class AdminController extends Controller
 
         return response()->json($recentOrders);
     }
+    public function getAllOrders(\Illuminate\Http\Request $request)
+{
+    $status = strtolower((string) $request->query('status', '')); // ej: pending | paid | cash_on_delivery | awaiting_payment
+    $query  = \App\Models\Order::query()->orderByDesc('id');
+
+    if ($status !== '') {
+        $query->whereRaw('LOWER(status) = ?', [$status]);
+    }
+
+    // opcional: paginado simple
+    $perPage = (int) $request->query('perPage', 20);
+    $orders  = $query->paginate($perPage);
+
+    $map = $orders->getCollection()->map(function (\App\Models\Order $o) {
+        $label = 'Desconocido'; $badge = 'secondary';
+        switch (strtolower($o->status ?? '')) {
+            case 'paid':
+            case 'completed':
+                $label = 'Completado'; $badge = 'success'; break;
+            case 'awaiting_payment':
+            case 'awaiting_review':
+            case 'processing':
+                $label = 'En espera'; $badge = 'info'; break;
+            case 'cash_on_delivery':
+            case 'pending':
+                $label = 'Pendiente'; $badge = 'warning'; break;
+            case 'cancelled':
+                $label = 'Cancelado'; $badge = 'danger'; break;
+        }
+
+        return [
+            'id'                  => $o->id,
+            'code'                => sprintf('ORD-%04d', $o->id),
+            'created_at'          => $o->created_at,
+            'customer_name'       => $o->name,
+            'status'              => $o->status,
+            'status_label'        => $label,
+            'status_badge'        => $badge,
+            'total'               => (float) $o->total,
+            'payment_method'      => $o->payment_method,
+            'payment_reference'   => $o->payment_reference ?? null,
+            'payment_verified_at' => $o->payment_verified_at,
+        ];
+    });
+
+    // reemplaza la colección por el mapeo
+    $orders->setCollection($map);
+
+    return response()->json([
+        'success' => true,
+        'data'    => $orders->items(),
+        'meta'    => [
+            'current_page' => $orders->currentPage(),
+            'per_page'     => $orders->perPage(),
+            'total'        => $orders->total(),
+            'last_page'    => $orders->lastPage(),
+        ],
+    ]);
+}
+
 }

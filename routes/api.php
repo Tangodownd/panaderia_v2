@@ -128,6 +128,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/stats', [AdminController::class, 'getStats']);
     Route::get('/admin/orders/recent', [AdminController::class, 'getRecentOrders']);
     Route::post('/orders/{id}/complete-cash', [OrderController::class, 'completeCashOrder']);
+    // Listado general de órdenes (opcionalmente filtradas por status)
+    Route::get('/admin/orders', [AdminController::class, 'getAllOrders']);
 
     // Solo administradores
     Route::middleware('admin')->group(function () {

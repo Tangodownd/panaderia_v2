@@ -29,6 +29,13 @@ const routes = [
       { path: "administradores", name: "adminUsers", component: AdminUsers },
     ],
   },
+      {
+      path: '/admin/orders',
+      name: 'adminOrders',
+      component: () => import('@/components/admin/AdminOrders.vue'),
+      meta: { requiresAuth: true }
+    },
+
 ]
 
 const router = createRouter({
