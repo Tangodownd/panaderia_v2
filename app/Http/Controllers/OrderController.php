@@ -11,6 +11,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Twilio\Rest\Client;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Laravel\Sanctum\PersonalAccessToken;
+
 
 class OrderController extends Controller
 {
@@ -269,9 +271,16 @@ class OrderController extends Controller
             $total += $item->quantity * $item->price;
         }
 
+        $uid = auth()->id();
+        if (!$uid && $request->bearerToken()) {
+            $pat = PersonalAccessToken::findToken($request->bearerToken());
+            if ($pat) $uid = (int) $pat->tokenable_id;
+        }
+
+
         // Crear orden
         $order = new Order();
-        $order->user_id          = auth()->id();
+        $order->user_id = $uid;
         $order->name             = $request->name;
         $order->email            = $request->email;
         $order->phone            = $request->phone;

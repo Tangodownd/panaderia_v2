@@ -7,9 +7,24 @@ use App\Models\CartItem;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Laravel\Sanctum\PersonalAccessToken;
+
 
 class CartController extends Controller
-{
+{   
+
+    private function resolveUserId(Request $request): ?int
+    {
+        if (auth()->check()) return auth()->id();
+
+        $bearer = $request->bearerToken();
+        if ($bearer) {
+            $pat = PersonalAccessToken::findToken($bearer);
+            if ($pat) return (int) $pat->tokenable_id;
+        }
+        return null;
+    }
+
     /**
      * Obtener o crear el carrito para la sesión actual
      * Usando un identificador de carrito en cookie
@@ -60,6 +75,14 @@ class CartController extends Controller
             
             \Log::info('Nuevo carrito creado', ['cart_id' => $cart->id]);
         }
+
+        // Después de encontrar o crear $cart:
+        $uid = $this->resolveUserId($request);
+        if ($uid && (!$cart->user_id || $cart->user_id !== $uid)) {
+            $cart->user_id = $uid;
+            $cart->save();
+        }
+
         
         return $cart;
     }

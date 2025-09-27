@@ -15,6 +15,8 @@ use App\Services\WhatsAppService;
 use Illuminate\Support\Facades\Log;
 use App\Models\OrderItem;
 use App\Models\Order;
+use Laravel\Sanctum\PersonalAccessToken;
+
 
 class ChatProcessController extends Controller
 {
@@ -24,11 +26,18 @@ class ChatProcessController extends Controller
     ) {}
 
     public function process(Request $req, AiClient $ai)
-    {
+    {   
+        $customerId = auth()->id();
+        if (!$customerId && $req->bearerToken()) {
+            $pat = PersonalAccessToken::findToken($req->bearerToken());
+            if ($pat) $customerId = (int) $pat->tokenable_id;
+        }
+
         $sessionId = session()->getId();
         $text = trim((string) $req->input('text', ''));
 
-        $conversationId = $this->getOrCreateConversationId();
+        $conversationId = $this->getOrCreateConversationId($customerId);
+
 
         // 1) Wizard activo
         $state = $this->getChatState();
@@ -389,18 +398,24 @@ Pago: {$pay}".(in_array($pay,['transferencia','pago_movil','zelle'])?" (Ref: {$r
     }
 
 
-    private function getOrCreateConversationId(): int
+    private function getOrCreateConversationId(?int $customerId = null): int
     {
-        $sid     = session()->getId();
-        $custId  = auth()->id();
+        $sid = session()->getId();
 
         $conv = \App\Models\Conversation::firstOrCreate(
             ['session_id' => $sid, 'state' => 'open'],
-            ['customer_id' => $custId, 'state' => 'open']
+            ['customer_id' => $customerId, 'state' => 'open']
         );
+
+        // Si ya existía y no tenía customer_id, lo completamos
+        if ($customerId && !$conv->customer_id) {
+            $conv->customer_id = $customerId;
+            $conv->save();
+        }
 
         return (int) $conv->id;
     }
+
 
     private function saveBotMessage(int $conversationId, string $text, array $metadata = []): void
     {

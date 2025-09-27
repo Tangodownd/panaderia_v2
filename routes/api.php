@@ -15,7 +15,7 @@ use App\Http\Controllers\Api\ProductController as ApiProductController;
 use App\Http\Controllers\ChatProcessController;
 use App\Http\Controllers\TwilioWebhookController;
 use App\Http\Controllers\ChatMessagesController;
-
+use App\Http\Controllers\CustomerAuthController;
 
 
 /*
@@ -37,6 +37,8 @@ Route::get('/products/{id}', [WebProductController::class, 'show']);
 Route::post('/webhooks/twilio/whatsapp', [TwilioWebhookController::class, 'incoming'])
     ->middleware('twilio.verify')
     ->name('webhooks.twilio.whatsapp');
+
+Route::post('/customer/register', [CustomerAuthController::class, 'register']);
 
 /*
 |--------------------------------------------------------------------------
@@ -98,7 +100,7 @@ Route::get('/api/products/check-availability', [ProductController::class, 'check
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:sanctum')->group(function () {
-    
+
     // Sesión
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', function (Request $request) {
@@ -140,6 +142,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Órdenes del usuario autenticado
     Route::get('/orders/user', [OrderController::class, 'getUserOrders']);
+        
+    // Clientes
+    Route::get('/customer/me', [CustomerAuthController::class, 'me']);
+    Route::get('/me/orders', [OrderController::class, 'getUserOrders']);
+
 });
 
 /*

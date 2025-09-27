@@ -32,9 +32,28 @@
               <a class="nav-link" href="#contacto">Contacto</a>
             </li>
           </ul>
-          <div class="d-flex">
-            <shopping-cart ref="shoppingCart" @checkout="openCheckout" />
-          </div>
+<div class="d-flex align-items-center gap-2">
+  <router-link
+    v-if="!isAuth"
+    :to="{ name:'customerLogin' }"
+    class="btn btn-outline-brown me-2"
+  >
+    Iniciar sesión
+  </router-link>
+
+  <template v-else>
+    <router-link :to="{ name:'myOrders' }" class="btn btn-outline-brown me-2">
+      Mis compras
+    </router-link>
+    <button class="btn btn-outline-brown" @click="logout">
+      Cerrar sesión
+    </button>
+  </template>
+
+  <shopping-cart ref="shoppingCart" @checkout="openCheckout" />
+</div>
+
+
         </div>
       </div>
     </nav>
@@ -134,117 +153,144 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { onMounted } from 'vue'
+import axios from "@/axios-config"
 import ShoppingCart from './ShoppingCart.vue'
 import CheckoutForm from './CheckoutForm.vue'
+import auth from '../../services/auth'          // tu servicio auth.js (el que guarda token)
+import { eventBus } from "../../services/event-bus"
 
-// clave de sesión del chat (sin depender de LocalStorage para abrir/cerrar, solo para session_id)
 const SID_KEY = 'chat_sid_v1'
 
 export default {
   name: 'ClientApp',
   components: { ShoppingCart, CheckoutForm },
 
-  data () {
+  data() {
     return {
-      // --- Estado del chat (versión que sí responde) ---
+      categories: [],
+      cart: { items: [], total: 0 },
+
       chatOpen: false,
       sending: false,
       text: '',
       messages: [],
-      sid: localStorage.getItem(SID_KEY) || (crypto && crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
+      sid: localStorage.getItem(SID_KEY) || (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now())),
       unread: 0,
 
-      // --- Estado existente ---
-      isChatOpen: false, // ya no se usa, pero lo dejamos por compatibilidad si algún hijo lo emite
+      // reactividad para login/logout
+      authVersion: 0,
+
+      _onCheckout: null,
+      _onAuthChanged: null,
+      _onStorage: null,
     }
   },
 
-  mounted () {
-    // Persistir session id
+  computed: {
+    isAuth() {
+      // forzamos recomputación leyendo authVersion
+      void this.authVersion
+      return auth.isAuthenticated()
+    }
+  },
+
+  created() {
+    // Inicializa header Authorization si había token
+    auth.initializeAuth()
+
+    this.fetchCategories()
+    this.fetchCart()
+
+    if (typeof bootstrap === 'undefined') {
+      const script = document.createElement('script')
+      script.src = 'https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js'
+      document.head.appendChild(script)
+    }
+  },
+
+  mounted() {
     localStorage.setItem(SID_KEY, this.sid)
 
-      this._onCheckout = (ev) => {
-    try {
-      if (ev?.detail?.cart) {
-        this.cart = ev.detail.cart
-      }
-    } catch (_) {}
-    this.openCheckout()
-  }
-  document.addEventListener('checkout', this._onCheckout)
+    // checkout listener
+    this._onCheckout = (ev) => {
+      try { if (ev?.detail?.cart) this.cart = ev.detail.cart } catch {}
+      this.openCheckout()
+    }
+    document.addEventListener('checkout', this._onCheckout)
 
+    // react a eventos de login/logout
+    this._onAuthChanged = () => { this.authVersion++ }
+    eventBus.on('auth:changed', this._onAuthChanged)
+
+    // react a cambios en localStorage (otra pestaña, etc.)
+    this._onStorage = (e) => {
+      if (e.key === 'auth_token' || e.key === 'user') this.authVersion++
+    }
+    window.addEventListener('storage', this._onStorage)
   },
-  unmounted () {
-  if (this._onCheckout) {
-    document.removeEventListener('checkout', this._onCheckout)
-  }
-},
 
-  
+  unmounted() {
+    if (this._onCheckout) document.removeEventListener('checkout', this._onCheckout)
+    if (this._onAuthChanged) eventBus.off('auth:changed', this._onAuthChanged)
+    if (this._onStorage) window.removeEventListener('storage', this._onStorage)
+  },
+
   methods: {
-    // ===== CHAT methods =====
-    toggleChat () {
-      this.chatOpen = !this.chatOpen
-      if (this.chatOpen) {
-        this.unread = 0
-        this.$nextTick(() => this.scrollChatToBottom())
-      }
+    // === AUTH ===
+    async logout() {
+      try {
+        // si tienes /api/logout funcionando, úsalo:
+        await axios.post('/api/logout').catch(() => {})
+      } catch (_) {}
+      auth.clearAuth()
+      this.authVersion++
+      this.$router.push({ name: 'customerLogin' })
     },
-    scrollChatToBottom () {
+
+    // === CHAT ===
+    toggleChat() {
+      this.chatOpen = !this.chatOpen
+      if (this.chatOpen) { this.unread = 0; this.$nextTick(this.scrollChatToBottom) }
+    },
+    scrollChatToBottom() {
       const el = this.$refs.chatScroll
       if (el) el.scrollTop = el.scrollHeight
     },
-    async sendChat () {
+    async sendChat() {
       const t = this.text.trim()
       if (!t) return
       this.sending = true
-
-      // pinta mi mensaje
       this.messages.push({ id: Date.now(), role: 'user', text: t })
       this.text = ''
 
       try {
-        // Usa la instancia de Axios registrada con VueAxios (this.axios)
-        // ver registro en client-app.js donde se hace app.use(VueAxios, axios) 
-        const { data } = await this.axios.post('/api/chat/process', {
-          session_id: this.sid,
-          text: t
-        })
+        const { data } = await axios.post('/api/chat/process', { session_id: this.sid, text: t })
         const reply = data?.reply || 'Entendido.'
         this.messages.push({ id: Date.now() + 1, role: 'assistant', text: reply })
         if (!this.chatOpen) this.unread++
       } catch (e) {
-        this.messages.push({
-          id: Date.now() + 2,
-          role: 'assistant',
-          text: 'Hubo un problema al enviar tu mensaje. Inténtalo de nuevo.'
-        })
+        this.messages.push({ id: Date.now() + 2, role: 'assistant', text: 'Hubo un problema al enviar tu mensaje. Inténtalo de nuevo.' })
         if (!this.chatOpen) this.unread++
       } finally {
         this.sending = false
-        this.$nextTick(() => this.scrollChatToBottom())
+        this.$nextTick(this.scrollChatToBottom)
       }
     },
-    // === Enlazador de URLs ===
-    // Detecta URLs en un texto y las transforma en segmentos. Si es una factura, usa 'Descargar ahora' como etiqueta.
-    linkifySegments (raw) {
+    linkifySegments(raw) {
       const text = String(raw ?? '')
       const lines = text.split(/\r?\n/)
       const urlRe = /(https?:\/\/[^\s)\]}]+[^\s)\]}.,;:!?])/gi
       const out = []
       lines.forEach((line, idx) => {
         if (idx > 0) out.push({ type: 'text', text: '\n' })
-        let last = 0
-        let match
-        while ((match = urlRe.exec(line)) !== null) {
-          const url = match[0]
-          const start = match.index
-          const end = start + url.length
+        let last = 0; let m
+        while ((m = urlRe.exec(line)) !== null) {
+          const url = m[0], start = m.index, end = start + url.length
           if (start > last) out.push({ type: 'text', text: line.slice(last, start) })
-          const isInvoice = /\/api\/orders\/\d+\/invoice(?:\?|$)/i.test(url) ||
-                            /\/orders\/\d+\/invoice(?:\?|$)/i.test(url) ||
-                            /\/invoice\.pdf(?:\?|$)/i.test(url)
+          const isInvoice = /\/api\/orders\/\d+\/invoice(?:\?|$)/i.test(url)
+                         || /\/orders\/\d+\/invoice(?:\?|$)/i.test(url)
+                         || /\/invoice\.pdf(?:\?|$)/i.test(url)
           out.push({ type: 'link', href: url, label: isInvoice ? 'Aqui' : url })
           last = end
         }
@@ -252,30 +298,28 @@ export default {
       })
       return out
     },
-    renderMessage (raw) {
-      return this.linkifySegments(raw)
-    },
+    renderMessage(raw) { return this.linkifySegments(raw) },
 
-    // ===== Lógica existente (carrito, checkout) =====
-    async fetchCategories () {
+    // === DATA ===
+    async fetchCategories() {
       try {
-        const { data } = await this.axios.get('/api/categories')
-        this.categories = data
+        const { data } = await axios.get('/api/categories')
+        this.categories = Array.isArray(data) ? data : []
       } catch (error) {
         console.error('Error al cargar categorías:', error)
         this.categories = []
       }
     },
-    async fetchCart () {
+    async fetchCart() {
       try {
-        const { data } = await this.axios.get('/api/cart')
-        this.cart = data.cart
-        this.cart.items = data.items
+        const { data } = await axios.get('/api/cart')
+        this.cart = data.cart || { items: [], total: 0 }
+        this.cart.items = data.items || []
       } catch (error) {
         console.error('Error al cargar el carrito:', error)
       }
     },
-    async addToCart ({ product, quantity }) {
+    async addToCart({ product, quantity }) {
       try {
         if (this.$refs.shoppingCart) {
           await this.$refs.shoppingCart.addToCart(product, quantity)
@@ -286,28 +330,19 @@ export default {
         this.showNotification('Error al añadir producto al carrito', 'danger')
       }
     },
-    async resetCart () {
+    async resetCart() {
       try {
         await this.fetchCart()
-        if (this.$refs.shoppingCart) {
-          this.$refs.shoppingCart.fetchCart()
-        }
+        if (this.$refs.shoppingCart) this.$refs.shoppingCart.fetchCart()
         document.dispatchEvent(new Event('cart-updated'))
       } catch (error) {
         console.error('Error al resetear el carrito:', error)
       }
     },
-    openCheckout () {
-      // Dejamos que el modal del carrito se cierre solo;
-      // luego abrimos nuestro modal de checkout.
-      setTimeout(() => {
-        if (this.$refs.checkoutForm) {
-          this.$refs.checkoutForm.openCheckoutModal()
-        }
-      }, 250) // margen para la animación de Bootstrap
+    openCheckout() {
+      setTimeout(() => this.$refs.checkoutForm?.openCheckoutModal(), 250)
     },
-
-    showNotification (message, type = 'success') {
+    showNotification(message, type = 'success') {
       const notification = document.createElement('div')
       notification.className = `toast align-items-center text-white bg-${type} border-0 position-fixed bottom-0 end-0 m-3`
       notification.setAttribute('role', 'alert')
@@ -317,55 +352,16 @@ export default {
         <div class="d-flex">
           <div class="toast-body">${message}</div>
           <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-        </div>
-      `
+        </div>`
       document.body.appendChild(notification)
-      if (typeof bootstrap !== 'undefined') {
-        const toast = new bootstrap.Toast(notification, { delay: 3000 })
-        toast.show()
-      }
-      notification.addEventListener('hidden.bs.toast', function () {
-        document.body.removeChild(notification)
-      })
-    }
+      if (typeof bootstrap !== 'undefined') new bootstrap.Toast(notification, { delay: 3000 }).show()
+      notification.addEventListener('hidden.bs.toast', () => document.body.removeChild(notification))
+    },
   },
-
-  // Conservamos tu setup() original, pero migramos sus métodos a this.* para unificar Axios y refs
-  setup () {
-    const categories = ref([])
-    const cart = ref({ items: [], total: 0 })
-    const checkoutForm = ref(null)
-    const shoppingCart = ref(null)
-
-    onMounted(() => {
-      // Los fetch ahora viven como methods para usar this.axios; llamamos desde aquí
-      const vm = /** @type {any} */ (/** @type {unknown} */ null)
-      // Truco: onMounted de Composition no tiene this; mejor disparar eventos DOM para que mounted/created no dupliquen.
-    })
-
-    return {
-      categories,
-      cart,
-      checkoutForm,
-      shoppingCart
-    }
-  },
-
-  created () {
-    // Ejecutamos fetch usando methods (this.axios)
-    this.fetchCategories()
-    this.fetchCart()
-
-    // Cargar Bootstrap si falta
-    if (typeof bootstrap === 'undefined') {
-      const script = document.createElement('script')
-      script.src = 'https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js'
-      script.onload = () => console.log('Bootstrap cargado dinámicamente')
-      document.head.appendChild(script)
-    }
-  }
 }
 </script>
+
+
 
 <style>
 body {
