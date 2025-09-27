@@ -76,7 +76,7 @@ export default {
           out.push({
             type: 'link',
             href: url,
-            label: isInvoice ? 'Descargar ahora' : url
+            label: isInvoice ? 'Aqui' : url
           })
 
           last = end

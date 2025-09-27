@@ -62,12 +62,13 @@ class ChatProcessController extends Controller
     private function routeIntent(string $intent, array $entities, array $nlu): string
     {
         return match ($intent) {
-            'CREATE_ORDER', 'ADD_TO_CART' => $this->handleAddToCart($entities),
-            'LIST_PRODUCTS'                => $this->handleListAvailableProducts($entities, $nlu), // <- NUEVO
-            'CHECK_STOCK'                  => $this->handleCheckStock($entities),
-            'RECOMMEND'                    => $this->handleRecommend(),
-            'CONFIRM_ORDER'                => $this->handleConfirmOrder(),
-            default                        => $nlu['reply'] ?? 'Puedo ayudarte a hacer tu pedido. ¿Qué deseas hoy?',
+        'CREATE_ORDER', 'ADD_TO_CART' => $this->handleAddToCart($entities),
+        'CHECK_STOCK'                  => $this->handleCheckStock($entities),
+        'ASK_PRICE'                    => $this->handleAskPrice($entities), // ← NUEVO
+        'LIST_PRODUCTS'                => $this->handleListAvailableProducts($entities, $nlu),
+        'RECOMMEND'                    => $this->handleRecommend(),
+        'CONFIRM_ORDER'                => $this->handleConfirmOrder(),
+        default                        => $nlu['reply'] ?? 'Puedo ayudarte a hacer tu pedido. ¿Qué deseas hoy?',
         };
     }
 
@@ -109,7 +110,8 @@ class ChatProcessController extends Controller
         if (empty($st['address'])) $need[] = 'address';
         if (empty($st['payment_method'])) $need[] = 'payment_method';
 
-        if (!empty($st['payment_method']) && in_array($st['payment_method'], ['transferencia','pago_movil','zelle'])) {
+        if (!empty($st['payment_method']) && in_array($st['payment_method'], ['transfer','mobile','zelle'])) {
+
             if (empty($st['payment_reference'])) $need[] = 'payment_reference';
         }
         return $need;
@@ -120,13 +122,14 @@ class ChatProcessController extends Controller
         $t = Str::lower($text);
         $t = str_replace(['á','é','í','ó','ú'], ['a','e','i','o','u'], $t);
 
-        if (Str::contains($t, ['efectivo','cash'])) return 'efectivo';
+        if (Str::contains($t, ['efectivo','cash'])) return 'cash';
         if (Str::contains($t, ['zelle'])) return 'zelle';
-        if (Str::contains($t, ['pago movil','pagomovil','movil','mobile'])) return 'pago_movil';
-        if (Str::contains($t, ['transfer','transferencia'])) return 'transferencia';
+        if (Str::contains($t, ['pago movil','pagomovil','movil','mobile'])) return 'mobile';
+        if (Str::contains($t, ['transfer','transferencia'])) return 'transfer';
 
         return null;
     }
+
 
     private function isValidPhone(string $text): bool
     {
@@ -161,7 +164,7 @@ class ChatProcessController extends Controller
                 $pm = $this->normalizePaymentMethod($text);
                 if (!$pm) return 'Método no reconocido. Opciones: efectivo, transferencia, pago móvil o zelle.';
 
-                if (in_array($pm, ['transferencia','pago_movil','zelle'])) {
+                if (in_array($pm, ['transfer','mobile','zelle'])) {
                     $this->setStep('ask_payment_reference', ['payment_method' => $pm]);
                     $datos = $this->bankInstructionsFor($pm);
                     return $datos . "\n\nIndica el número de referencia o últimos 4 dígitos.\n(Al enviarla, cerraremos tu pedido automáticamente)";
@@ -267,11 +270,11 @@ Pago: {$pay}".(in_array($pay,['transferencia','pago_movil','zelle'])?" (Ref: {$r
             'name'              => $st['name'] ?? 'Cliente web',
             'phone'             => $st['phone'] ?? '',
             'shipping_address'  => $st['address'] ?? 'PENDIENTE',
-            'payment_method'    => 'efectivo',
+            'payment_method'    => 'cash',
             'payment_reference' => null,
             'notes'             => 'Creado desde chatbot (efectivo)',
             'email'             => $st['email'] ?? null,
-            'deduct_now'        => false,
+            'deduct_now'        => true,
         ]);
 
         $orderItems = OrderItem::where('order_id', $order->id)->with('product')->get();
@@ -304,11 +307,13 @@ Pago: {$pay}".(in_array($pay,['transferencia','pago_movil','zelle'])?" (Ref: {$r
             'name'              => $state['name'] ?? 'Cliente web',
             'phone'             => $state['phone'] ?? '',
             'shipping_address'  => $state['address'] ?? 'PENDIENTE',
-            'payment_method'    => $state['payment_method'] ?? 'transferencia',
+            'payment_method'    => $state['payment_method'] ?? 'transfer',
             'payment_reference' => $state['payment_reference'] ?? null,
             'notes'             => 'Creado desde chatbot',
             'email'             => $state['email'] ?? null,
         ]);
+        $this->deductStockForOrder($order->id);
+
 
         $st = $this->getChatState();
         $st->update(['data' => array_merge($state, ['order_id' => $order->id])]);
@@ -317,14 +322,23 @@ Pago: {$pay}".(in_array($pay,['transferencia','pago_movil','zelle'])?" (Ref: {$r
     }
 
     private function markOrderPaidNow(Order $order, ?string $reference = null): Order
-    {
-        $order->payment_reference   = $reference ?: $order->payment_reference;
-        $order->status              = 'paid';
-        $order->payment_verified_at = now();
-        $order->save();
-
-        return $order->fresh();
+{
+    // asegurar método de pago si vino del wizard
+    $st = $this->getChatState()->data ?? [];
+    if (empty($order->payment_method) && !empty($st['payment_method'])) {
+        $order->payment_method = $st['payment_method']; // efectivo | transferencia | pago_movil | zelle
     }
+
+    // referencia y estado "completed" para que aparezca el badge verde en Pedidos Recientes
+    $order->payment_reference   = $reference ?: $order->payment_reference;
+    $order->payment_verified_at = now();
+    $order->status              = 'completed';
+    $order->save();
+
+
+    return $order->fresh();
+}
+
 
     private function getActiveCart(Request $req): ?Cart
     {
@@ -368,11 +382,12 @@ Pago: {$pay}".(in_array($pay,['transferencia','pago_movil','zelle'])?" (Ref: {$r
     private function bankInstructionsFor(string $method): string
     {
         return match ($method) {
-            'zelle' => "Método seleccionado: Zelle\n\nZelle: correo@ejemplo.com\nNombre: Panadería Orquídea de Oro",
-            'pago_movil' => "Método seleccionado: Pago Móvil\n\nTel: 0412-1234567\nBanco: Bxxxx\nRIF: J-12345678-9",
-            default => "Método seleccionado: Transferencia\n\nBanco: Bxxxx\nCuenta: 0102-0000-00-0000000000\nTitular: Panadería Orquídea de Oro\nRIF: J-12345678-9",
+            'zelle'  => "Método seleccionado: Zelle\n\nZelle: orquideadeoro@panaderia.com\nNombre: Panadería Orquídea de Oro",
+            'mobile' => "Método seleccionado: Pago Móvil\n\nTel: 0412-1234567\nBanco: Banco de Venezuela\nRIF: J-12345678-9",
+            default  => "Método seleccionado: Transferencia\n\nBanco: Banco de Venezuela\nCuenta: 0102-0000-00-0000000000\nTitular: Panadería Orquídea de Oro\nRIF: J-12345678-9",
         };
     }
+
 
     private function getOrCreateConversationId(): int
     {
@@ -466,10 +481,8 @@ Pago: {$pay}".(in_array($pay,['transferencia','pago_movil','zelle'])?" (Ref: {$r
 
 private function handleCheckStock(array $entities): string
 {
-    // 1) Extraer el término
     $text = trim((string) request()->input('text', ''));
-    $term = $this->extractStockQuery($entities, $text);
-
+    $term = $this->extractProductQuery('CHECK_STOCK', $entities, $text);
     if ($term === '') {
         return '¿De cuál producto quieres saber disponibilidad? Por ejemplo: *¿tienes pan canilla disponible?*';
     }
@@ -528,40 +541,36 @@ private function handleCheckStock(array $entities): string
 
 
 /**
- * Normaliza el término para preguntas de disponibilidad.
- * - Usa entities['query'] si viene, pero SIEMPRE limpia stops (hay, disponible, stock, etc.).
- * - Si no viene, limpia el texto original.
+ * Normaliza el término de producto según el intent (CHECK_STOCK / ASK_PRICE).
  */
-private function extractStockQuery(array $entities, string $text): string
+private function extractProductQuery(string $intent, array $entities, string $text): string
 {
-    // 1) Punto de partida: entities.query > texto
     $raw = trim((string)($entities['query'] ?? ''));
     if ($raw === '') $raw = $text;
 
-    // 2) normalizar
     $t = ' ' . mb_strtolower($raw) . ' ';
     // quitar signos
     $t = preg_replace('~[?¿¡!.,;:"]+~u', ' ', $t);
-    // quitar conectores tipo "de"
-    $t = preg_replace('~\bde(l|la|los|las)?\b~u', ' ', $t);
+    // artículos y conectores
+    $t = preg_replace('~\b(el|la|los|las|de|del|al|a|un|una|unos|unas)\b~u', ' ', $t);
 
-    // 3) quitar palabras gatillo en cualquier posición
-    $triggers = [
-        'hay','tiene','tienes','tienen',
-        'disponible','disponibles',
-        'stock','queda','quedan','queda?','quedan?'
-    ];
-    $pattern = '~\b(' . implode('|', array_map('preg_quote', $triggers)) . ')\b~u';
+    // triggers comunes
+    $common = ['hay','tiene','tienes','tienen','disponible','disponibles','stock','queda','quedan'];
+
+    // triggers de precio
+    $price  = ['precio','cuanto','cuánto','vale','cuesta','valor'];
+
+    $all = $intent === 'ASK_PRICE' ? array_merge($common, $price) : $common;
+
+    $pattern = '~\b(' . implode('|', array_map('preg_quote', $all)) . ')\b~u';
     $t = preg_replace($pattern, ' ', $t);
 
-    // 4) compactar espacios
+    // compactar espacios
     $t = trim(preg_replace('~\s+~u', ' ', $t));
 
-    // 5) evitar términos vacíos o demasiado genéricos
-    if ($t === '' || mb_strlen($t) < 2) return '';
-
-    return $t;
+    return (mb_strlen($t) >= 2) ? $t : '';
 }
+
 
 
 
@@ -599,6 +608,62 @@ private function handleListAvailableProducts(array $entities, array $nlu): strin
          . "Es más cómodo verlos en el catálogo: ({$catalogUrl})\n\n"
          . "Si quieres, te digo la disponibilidad de un producto específico (ej.: *¿tienes pan canilla?*) o te muestro por categoría.";
 }
+private function handleAskPrice(array $entities): string
+{
+    $text = trim((string) request()->input('text', ''));
+    $term = $this->extractProductQuery('ASK_PRICE', $entities, $text);
+
+    if ($term === '') {
+        return '¿De cuál producto quieres saber el precio?';
+    }
+
+    $matches = \App\Models\Product::query()
+        // si quieres incluir sin stock, quita esta línea
+        ->where('stock', '>', 0)
+        ->where(function($q) use ($term) {
+            $q->where('name', 'like', "%{$term}%")
+              ->orWhere('description', 'like', "%{$term}%");
+        })
+        ->orderByDesc('updated_at')
+        ->limit(5)
+        ->get(['name','price','stock']);
+
+    if ($matches->isEmpty()) {
+        return "No tengo coincidencias para *{$term}*. ¿Quieres que te muestre productos similares?";
+    }
+
+    if ($matches->count() === 1) {
+        $p = $matches->first();
+        $precio = number_format((float) $p->price, 2, ',', '.');
+        return "El *{$p->name}* tiene un precio de *{$precio}*"
+             . ($p->stock > 0 ? " y hay *{$p->stock}* unidades disponibles." : ".");
+    }
+
+    $lines = [];
+    foreach ($matches as $m) {
+        $precio = number_format((float) $m->price, 2, ',', '.');
+        $lines[] = "• *{$m->name}* — {$precio}";
+    }
+    return "Encontré varios productos relacionados con *{$term}*:\n" . implode("\n", $lines);
+}
+/**
+ * Descuenta stock de los productos de una orden de forma segura.
+ */
+private function deductStockForOrder(int $orderId): void
+{
+    \DB::transaction(function () use ($orderId) {
+        $items = OrderItem::where('order_id', $orderId)->get();
+        foreach ($items as $it) {
+            // lockForUpdate para evitar carreras
+            $p = Product::where('id', $it->product_id)->lockForUpdate()->first();
+            if (!$p) continue;
+
+            $p->stock = max(0, (int)$p->stock - (int)$it->quantity);
+            $p->save();
+        }
+    });
+}
+
 
 
 

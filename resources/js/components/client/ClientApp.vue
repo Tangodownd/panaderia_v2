@@ -245,7 +245,7 @@ export default {
           const isInvoice = /\/api\/orders\/\d+\/invoice(?:\?|$)/i.test(url) ||
                             /\/orders\/\d+\/invoice(?:\?|$)/i.test(url) ||
                             /\/invoice\.pdf(?:\?|$)/i.test(url)
-          out.push({ type: 'link', href: url, label: isInvoice ? 'Descargar ahora' : url })
+          out.push({ type: 'link', href: url, label: isInvoice ? 'Aqui' : url })
           last = end
         }
         if (last < line.length) out.push({ type: 'text', text: line.slice(last) })

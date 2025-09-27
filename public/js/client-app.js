@@ -22305,7 +22305,7 @@ __webpack_require__.r(__webpack_exports__);
           out.push({
             type: 'link',
             href: url,
-            label: isInvoice ? 'Descargar ahora' : url
+            label: isInvoice ? 'Aqui' : url
           });
           last = end;
         }
@@ -23098,7 +23098,7 @@ const SID_KEY = 'chat_sid_v1';
           out.push({
             type: 'link',
             href: url,
-            label: isInvoice ? 'Descargar ahora' : url
+            label: isInvoice ? 'Aqui' : url
           });
           last = end;
         }

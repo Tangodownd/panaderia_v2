@@ -224,8 +224,6 @@ class OrderController extends Controller
 
         $msg = "Hemos verificado tu {$pretty}{$refTxt}. ✅\n\n"
              . "{$summary}\n\n"
-             . "Aquí tienes tu factura digital: {$invoiceUrl}\n"
-             . "¿Deseas imprimirla?\n\n"
              . "¡Pedido #{$order->id} creado! Te contactamos al {$order->phone}. ¡Gracias!";
 
         $this->sendWhatsAppMessage($order->phone, $msg);
@@ -369,9 +367,7 @@ class OrderController extends Controller
         if (!in_array($order->payment_method, ['transfer', 'zelle', 'mobile'])) {
             return response()->json(['success' => false, 'message' => 'Este flujo es solo para pagos electrónicos'], 422);
         }
-        if (!in_array($order->status, ['awaiting_payment', 'awaiting_review'])) {
-            return response()->json(['success' => false, 'message' => 'La orden no admite comprobante en este estado'], 422);
-        }
+
 
         $path = $request->file('payment_proof')->store('payment_proofs', 'public');
         $order->payment_proof_path = $path;

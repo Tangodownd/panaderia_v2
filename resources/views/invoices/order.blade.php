@@ -129,14 +129,7 @@
 </tbody>
     </table>
 <div class="totals">
-  <div class="line">
-    <span>Subtotal</span>
-    <span>{{ number_format((float)$subtotal, 2, '.', ',') }}</span>
-  </div>
-  <div class="line">
-    <span>IVA ({{ isset($order->tax_rate) ? number_format($order->tax_rate*100,2) : '16.00' }}%)</span>
-    <span>{{ number_format((float)$tax, 2, '.', ',') }}</span>
-  </div>
+
   <div class="line grand">
     <span>Total</span>
     <span>{{ number_format((float)$total, 2, '.', ',') }}</span>

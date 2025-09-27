@@ -69,7 +69,7 @@ public function sendPaymentVerifiedUnified(?string $phone, Order $order, string 
         $pretty = match ($method) {
             'pago_movil','pago movil','pago_móvil' => 'pago móvil',
             'zelle'  => 'Zelle',
-            default  => 'transferencia'
+            'transfer'  => 'transferencia'
         };
         $refTxt = $reference ? " (Ref: {$reference})" : '';
 
@@ -88,11 +88,10 @@ public function sendPaymentVerifiedUnified(?string $phone, Order $order, string 
              . "Nombre: {$order->name}\n"
              . "Teléfono: {$order->phone}\n"
              . "Dirección: {$order->shipping_address}\n"
-             . "Pago: {$method}{$refTxt}\n\n"
-             . "Aquí tienes tu factura digital: {$invoiceUrl}\n"
-             . "¿Deseas imprimirla?\n\n"
-             . "¡Pedido #{$order->id} creado! Te contactamos al {$order->phone}. ¡Gracias!";
+             . "Pago: {$pretty}{$refTxt}\n\n"
+             . "¡Pedido #{$order->id} creado! Tienes alguna duda?";
 
         $this->sendCustomMessage($phone, $msg);
     }
+
 }
