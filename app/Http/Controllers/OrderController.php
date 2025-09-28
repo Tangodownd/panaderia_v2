@@ -633,4 +633,45 @@ public function completeCashOrder(Request $request, int $id)
         $pdf = Pdf::loadView('invoices.order', $data)->setPaper('A4');
         return $pdf->download(sprintf('Factura_Pedido_%s.pdf', $order->id));
     }
+    public function getUserOrders(Request $request)
+    {
+        $uid = auth()->id();
+        if (!$uid && $request->bearerToken()) {
+            $pat = PersonalAccessToken::findToken($request->bearerToken());
+            if ($pat) $uid = (int) $pat->tokenable_id;
+        }
+        if (!$uid) {
+            return response()->json(['success' => false, 'message' => 'No autenticado'], 401);
+        }
+
+        $orders = Order::where('user_id', $uid)
+            ->orderByDesc('id')
+            ->get();
+
+        $payload = $orders->map(function (Order $o) {
+            $statusInfo = $this->formatStatusForAdmin($o->status ?? '');
+            return [
+                'id'                  => $o->id,
+                'code'                => sprintf('ORD-%04d', $o->id),
+                'created_at'          => $o->created_at,
+                'customer_name'       => $o->name,
+                'status'              => $o->status,
+                'status_label'        => $statusInfo['label'],
+                'status_badge'        => $statusInfo['badge'],
+                'total'               => (float) $o->total,
+                'payment_method'      => $o->payment_method,
+                'payment_reference'   => $o->payment_reference ?? null,
+                'payment_verified_at' => $o->payment_verified_at,
+            ];
+        })->map(function($row){
+            $row['status'] = match ($row['status']) {
+            'paid' => 'Pagada',
+            'cash_on_delivery' => 'Efectivo al recibir',
+            default => $row['status'],
+            };
+            return $row;
+        })->values();
+
+        return response()->json(['success' => true, 'data' => $payload]);
+    }
 }
