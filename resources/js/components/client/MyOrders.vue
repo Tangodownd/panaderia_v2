@@ -13,9 +13,19 @@
             <td>#{{ o.id }}</td>
             <td>{{ new Date(o.created_at).toLocaleString() }}</td>
             <td>{{ o.status }}</td>
-            <td>${{ Number(o.total).toFixed(2) }}</td>
             <td>
-              <a class="btn btn-sm btn-outline-brown" :href="`/api/orders/${o.id}/invoice`">Descargar factura</a>
+              ${{ Number(o.total).toFixed(2) }}
+              <details class="d-inline-block ms-3">
+              <summary class="btn btn-sm btn-link p-0">Ver productos</summary>
+              <ul class="list-unstyled mt-2 mb-0">
+                <li v-for="item in o.items" :key="item.id">
+                {{ item.quantity }} × {{ item.name }} — ${{ Number(item.price).toFixed(2) }}
+                </li>
+              </ul>
+              </details>
+            </td>
+            <td>
+              <a class="btn btn-sm btn-link p-0" :href="`/api/orders/${o.id}/invoice`">Descargar factura</a>
             </td>
           </tr>
         </tbody>

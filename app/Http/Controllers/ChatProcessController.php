@@ -75,18 +75,23 @@ class ChatProcessController extends Controller
         ]);
     }
 
-    private function routeIntent(string $intent, array $entities, array $nlu): string
-    {
-        return match ($intent) {
-        'CREATE_ORDER', 'ADD_TO_CART' => $this->handleAddToCart($entities),
+private function routeIntent(string $intent, array $entities, array $nlu): string
+{
+    return match ($intent) {
+        'ORDER_HISTORY'                => $this->handleOrderHistory($entities),
+        'ORDER_DETAILS'                => $this->handleOrderHistory($entities), // usa order_id si viene
+        'PROVIDE_ORDER_ID'             => $this->handleOrderIdReply($nlu['normalized_text'] ?? ($nlu['text'] ?? '')),
+
+        'CREATE_ORDER', 'ADD_TO_CART'  => $this->handleAddToCart($entities),
         'CHECK_STOCK'                  => $this->handleCheckStock($entities),
-        'ASK_PRICE'                    => $this->handleAskPrice($entities), // ← NUEVO
+        'ASK_PRICE'                    => $this->handleAskPrice($entities),
         'LIST_PRODUCTS'                => $this->handleListAvailableProducts($entities, $nlu),
         'RECOMMEND'                    => $this->handleRecommend(),
         'CONFIRM_ORDER'                => $this->handleConfirmOrder(),
         default                        => $nlu['reply'] ?? 'Puedo ayudarte a hacer tu pedido. ¿Qué deseas hoy?',
-        };
-    }
+    };
+}
+
 
     /* =========================
        🔹 Wizard Conversacional
@@ -157,6 +162,9 @@ class ChatProcessController extends Controller
         $st = $this->getChatState();
 
         switch ($step) {
+            case 'ask_order_id':
+                    return $this->handleOrderIdReply($text);
+
             case 'ask_phone':
                 if (!$this->isValidPhone($text)) {
                     return '¿Me compartes un teléfono válido? (Ej: +58 424 1234567)';
@@ -561,7 +569,133 @@ private function handleCheckStock(array $entities): string
          . "\n\n¿Cuál te interesa?";
 }
 
+/**
+ * Muestra el historial de compras del usuario (últimos pedidos) o, si se
+ * provee order_id en entities, devuelve el detalle de esa orden.
+ *
+ * Uso desde NLU:
+ * - Intent que liste historial: llamar a this->handleOrderHistory($entities)
+ * - Intent que pida detalles: incluir entidad order_id para que devuelva el detalle
+ */
+private function handleOrderHistory(array $entities): string
+{
+    $uid = auth()->id();
+    if (!$uid && request()->bearerToken()) {
+        $pat = PersonalAccessToken::findToken(request()->bearerToken());
+        if ($pat) $uid = (int) $pat->tokenable_id;
+    }
 
+    if (!$uid) {
+        return 'Debes iniciar sesión para ver tu historial de compras.';
+    }
+
+    // Si la NLU ya nos dio un order_id, devolvemos detalle directo
+    $orderId = null;
+    if (!empty($entities['order_id'])) {
+        $orderId = (int) $entities['order_id'];
+    } elseif (!empty($entities['id'])) {
+        $orderId = (int) $entities['id'];
+    }
+
+    if ($orderId) {
+        $order = Order::where('id', $orderId)->where('user_id', $uid)->first();
+        if (!$order) {
+            return "No encontré la compra con ID {$orderId} en tu historial.";
+        }
+
+        $items = OrderItem::where('order_id', $order->id)->with('product')->get();
+        return $this->buildOrderSummaryText($order, $items);
+    }
+
+    // Listado breve de los últimos pedidos
+    $orders = Order::where('user_id', $uid)
+        ->orderByDesc('id')
+        ->limit(8)
+        ->get();
+
+    if ($orders->isEmpty()) {
+        return 'No tengo pedidos registrados para tu cuenta.';
+    }
+
+    // Mapear estados y métodos de pago a etiquetas más amigables en español
+    $statusMap = [
+        'paid'        => 'pagada',
+        'cash_on_delivery' => 'pagada (efectivo)',
+        'pending'     => 'pendiente',
+        'processing'  => 'en proceso',
+        'completed'   => 'completada',
+        'cancelled'   => 'cancelada',
+        'refunded'    => 'reembolsada',
+        // agrega más mapeos si los necesitas
+    ];
+
+    $paymentMap = [
+        'cash_on_delivery' => 'efectivo',
+        'cash'             => 'efectivo',
+        'transfer'         => 'transferencia',
+        'mobile'           => 'pago móvil',
+        'zelle'            => 'zelle',
+        // agrega más mapeos si los necesitas
+    ];
+
+    foreach ($orders as $o) {
+        $o->status = $statusMap[$o->status ?? ''] ?? ($o->status ?? '');
+        if (isset($o->payment_method)) {
+            $o->payment_method = $paymentMap[$o->payment_method ?? ''] ?? ($o->payment_method ?? '');
+        }
+    }
+
+    $lines = [];
+    foreach ($orders as $o) {
+        $statusInfo = method_exists($this, 'formatStatusForAdmin') ? $this->formatStatusForAdmin($o->status ?? '') : ['label' => ($o->status ?? '')];
+        $code = sprintf('ORD-%04d', $o->id);
+        $date = $o->created_at ? $o->created_at->format('Y-m-d') : '';
+        $total = number_format((float) $o->total, 2, ',', '.');
+        $lines[] = "{$o->id} ({$code}) — {$date} — {$statusInfo['label']} — \${$total}";
+    }
+
+    // Guardamos los últimos ids mostrados en el flujo conversacional para validar la respuesta del usuario
+    $ids = $orders->pluck('id')->toArray();
+    $this->setStep('ask_order_id', ['last_order_ids' => $ids]);
+
+    return "Aquí están tus últimas compras:\n" . implode("\n", $lines) . "\n\nSi quieres saber los detalles de alguna de estas compras indícame el ID (por ejemplo: 123).";
+}
+
+/**
+ * Intenta resolver una respuesta numérica cuando el wizard está en 'ask_order_id'.
+ * Se puede invocar desde handleWizardStep si añades el case correspondiente:
+ *   case 'ask_order_id': return $this->handleOrderIdReply($text); 
+ */
+private function handleOrderIdReply(string $text): string
+{
+    $st = $this->getChatState()->data ?? [];
+    $ids = $st['last_order_ids'] ?? [];
+
+    $candidate = (int) filter_var($text, FILTER_SANITIZE_NUMBER_INT);
+    if ($candidate <= 0) {
+        return 'Indica el ID numérico de la compra (ej: 123).';
+    }
+
+    // Si mostramos recientemente una lista, validamos que el ID esté en ella
+    if (!empty($ids) && !in_array($candidate, $ids, true)) {
+        // permitimos igualmente buscar por seguridad, pero avisamos
+        $order = Order::where('id', $candidate)->where('user_id', auth()->id())->first();
+        if (!$order) {
+            return "No encontré la compra {$candidate} en tu historial reciente. Revisa el ID o pide que te muestre nuevamente la lista.";
+        }
+    } else {
+        $order = Order::where('id', $candidate)->where('user_id', auth()->id())->first();
+        if (!$order) {
+            return "No encontré la compra con ID {$candidate}. Verifica el número y vuelve a intentarlo.";
+        }
+    }
+
+    $items = OrderItem::where('order_id', $order->id)->with('product')->get();
+    // cerramos el flujo de solicitud de ID
+    $this->clearFlow();
+
+    return $this->buildOrderSummaryText($order, $items);
+}
 /**
  * Normaliza el término de producto según el intent (CHECK_STOCK / ASK_PRICE).
  */

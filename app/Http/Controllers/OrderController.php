@@ -650,6 +650,27 @@ public function completeCashOrder(Request $request, int $id)
 
         $payload = $orders->map(function (Order $o) {
             $statusInfo = $this->formatStatusForAdmin($o->status ?? '');
+            $itemsPayload = OrderItem::where('order_id', $o->id)
+                ->with('product')
+                ->get()
+                ->map(function ($it) {
+                    $productName  = $it->product->name ?? ($it->name ?? ('Producto #' . $it->product_id));
+                    $fallbackUnit = (float) (($it->unit_price ?? 0) ?: ($it->price ?? 0) ?: (optional($it->product)->price ?? 0));
+                    return [
+                        'id'          => $it->id,
+                        'product_id'  => $it->product_id,
+                        'name'        => $productName,
+                        'quantity'    => (int) $it->quantity,
+                        'price'       => $fallbackUnit,
+                        'unit_price'  => (float) ($it->unit_price ?? 0),
+                        'product'     => [
+                            'id'    => $it->product->id ?? null,
+                            'name'  => $productName,
+                            'price' => (float) (optional($it->product)->price ?? 0),
+                        ],
+                    ];
+                })->values();
+
             return [
                 'id'                  => $o->id,
                 'code'                => sprintf('ORD-%04d', $o->id),
@@ -662,6 +683,7 @@ public function completeCashOrder(Request $request, int $id)
                 'payment_method'      => $o->payment_method,
                 'payment_reference'   => $o->payment_reference ?? null,
                 'payment_verified_at' => $o->payment_verified_at,
+                'items'               => $itemsPayload,
             ];
         })->map(function($row){
             $row['status'] = match ($row['status']) {
