@@ -29,8 +29,15 @@ class ChatProcessController extends Controller
     {   
         $customerId = auth()->id();
         if (!$customerId && $req->bearerToken()) {
-            $pat = PersonalAccessToken::findToken($req->bearerToken());
+            $pat =PersonalAccessToken::findToken($req->bearerToken());
             if ($pat) $customerId = (int) $pat->tokenable_id;
+        }
+
+        // 🚫 Si no hay cliente logeado, rechazamos
+        if (!$customerId) {
+            return response()->json([
+                'error' => 'Debes iniciar sesión como cliente para usar el asistente.'
+            ], 401);
         }
 
         $sessionId = session()->getId();

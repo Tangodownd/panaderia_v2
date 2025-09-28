@@ -1,6 +1,6 @@
 <template>
   <div class="bg-beige min-vh-100 d-flex flex-column">
-    <nav class="navbar navbar-expand-lg navbar-light bg-cream border-bottom border-brown sticky-top shadow-sm">
+    <nav v-if="showNavbar" class="navbar navbar-expand-lg navbar-light bg-cream border-bottom border-brown sticky-top shadow-sm">
       <div class="container">
         <a class="navbar-brand text-brown" href="#">
           <i class="fas fa-bread-slice me-2"></i>Panadería Orquidea de Oro
@@ -101,6 +101,7 @@
 
     <!-- === CHAT: FAB + Panel flotante (sin overlay) === -->
     <button
+      v-if="isAuth"
       class="chat-fab"
       type="button"
       @click="toggleChat"
@@ -112,7 +113,7 @@
     </button>
 
     <transition name="chat-fade">
-      <div v-if="chatOpen" class="chat-panel" role="dialog" aria-modal="true">
+      <div v-if="isAuth && chatOpen" class="chat-panel" role="dialog" aria-modal="true">
         <div class="chat-header">
           <div class="title">
             <i class="fas fa-bread-slice me-2"></i> Asistente Orquídea de Oro
@@ -189,10 +190,13 @@ export default {
 
   computed: {
     isAuth() {
-      // forzamos recomputación leyendo authVersion
-      void this.authVersion
-      return auth.isAuthenticated()
-    }
+    void this.authVersion
+    try { return !!localStorage.getItem('auth_token') } catch { return false }
+  },
+  showNavbar() {
+    // No muestres navbar en login/registro, o cuando no hay sesión
+    return this.isAuth && !this.$route.meta?.hideNavbar
+  },
   },
 
   created() {
@@ -249,10 +253,11 @@ export default {
     },
 
     // === CHAT ===
-    toggleChat() {
-      this.chatOpen = !this.chatOpen
-      if (this.chatOpen) { this.unread = 0; this.$nextTick(this.scrollChatToBottom) }
-    },
+  toggleChat() {
+    if (!this.isAuth) return this.$router.push({ name: 'customerLogin' })
+    this.chatOpen = !this.chatOpen
+    if (this.chatOpen) { this.unread = 0; this.$nextTick(this.scrollChatToBottom) }
+  },
     scrollChatToBottom() {
       const el = this.$refs.chatScroll
       if (el) el.scrollTop = el.scrollHeight

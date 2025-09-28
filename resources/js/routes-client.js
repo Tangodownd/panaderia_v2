@@ -11,12 +11,12 @@ import MyOrders from "./components/client/MyOrders.vue"
 import auth from "./services/auth"
 
 const routes = [
-  { path: "/", name: "customerLogin", component: CustomerLogin },
-  { path: "/registro", name: "customerRegister", component: CustomerRegister },
-  { path: "/home", name: "home", component: HomePage, meta: { requiresAuth: true } },
-  
-  { path: "/mis-compras", name: "myOrders", component: MyOrders },
-  { path: "/category/:id", name: "category", component: ProductCatalog, props: true },
+  { path: "/", name: "customerLogin", component: CustomerLogin, meta: { hideNavbar: true } },
+  { path: "/registro", name: "customerRegister", component: CustomerRegister, meta: { hideNavbar: true } },
+  { path: "/home", name: "home", component: HomePage, meta: { requiresAuth: true}  },
+
+  { path: "/mis-compras", name: "myOrders", component: MyOrders, meta: { requiresAuth: true } },
+  { path: "/category/:id", name: "category", component: ProductCatalog, props: true, meta: { requiresAuth: true } },
   { path: "/terminos-y-condiciones", name: "terminos", component: TerminosCondiciones },
   { path: "/politica-de-privacidad", name: "privacidad", component: PoliticaPrivacidad },
   { path: "/:pathMatch(.*)*", name: "notFound", component: NotFound },
