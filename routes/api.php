@@ -16,6 +16,7 @@ use App\Http\Controllers\ChatProcessController;
 use App\Http\Controllers\TwilioWebhookController;
 use App\Http\Controllers\ChatMessagesController;
 use App\Http\Controllers\CustomerAuthController;
+use App\Http\Controllers\AnalyticsController;
 
 
 /*
@@ -164,3 +165,9 @@ Route::prefix('v1')->group(function () {
         Route::delete('/products/{id}', [ApiProductController::class, 'destroy']);
     });
 });
+
+Route::get('/analytics/top-products', [AnalyticsController::class, 'topProducts']);
+Route::get('/analytics/peak-hours', [AnalyticsController::class, 'peakHours']);
+Route::get('/analytics/rfm', [AnalyticsController::class, 'rfm']);
+Route::get('/analytics/market-basket', [AnalyticsController::class, 'marketBasket']);
+Route::get('/analytics/daily-anomalies', [AnalyticsController::class, 'dailyAnomalies']);

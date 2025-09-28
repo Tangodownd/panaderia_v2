@@ -16,13 +16,16 @@ use Illuminate\Support\Facades\Log;
 use App\Models\OrderItem;
 use App\Models\Order;
 use Laravel\Sanctum\PersonalAccessToken;
+use App\Services\AnalyticsService;
+use App\Support\DateRanges;
 
 
 class ChatProcessController extends Controller
 {
     public function __construct(
         private OrderService $orderService,
-        private WhatsAppService $whatsapp
+        private WhatsAppService $whatsapp,
+        private AnalyticsService $analytics
     ) {}
 
     public function process(Request $req, AiClient $ai)
@@ -46,16 +49,6 @@ class ChatProcessController extends Controller
         $conversationId = $this->getOrCreateConversationId($customerId);
 
 
-        // 1) Wizard activo
-        $state = $this->getChatState();
-        if ($state->step) {
-            $reply = $this->handleWizardStep($state->step, $text, $conversationId);
-            return response()->json([
-                'reply' => $reply,
-                'conversation_id' => $conversationId,
-            ]);
-        }
-
         // 2) IA (opcional)
         $context = [
             'session_id'  => $sessionId,
@@ -66,6 +59,28 @@ class ChatProcessController extends Controller
 
         $intent   = $nlu['intent']   ?? 'SMALL_TALK';
         $entities = $nlu['entities'] ?? [];
+
+        // Si estaba pidiendo un ID y cambió de intención, reseteamos el flow
+        $st = $this->getChatState();
+        if (($st->step ?? null) === 'ask_order_id' && $intent !== 'PROVIDE_ORDER_ID') {
+            $this->clearFlow();
+        }
+
+        // 1) Wizard activo (AHORA sí, ya con intent evaluado y posible reset)
+        $state = $this->getChatState();
+        if ($state->step) {
+            // Si seguimos en ask_order_id y el intent SÍ es PROVIDE_ORDER_ID, dejamos que el wizard maneje
+            if ($state->step === 'ask_order_id' && $intent !== 'PROVIDE_ORDER_ID') {
+                // por seguridad, limpia si alguien mete ruido aquí
+                $this->clearFlow();
+            } else {
+                $reply = $this->handleWizardStep($state->step, $text, $conversationId);
+                return response()->json([
+                    'reply' => $reply,
+                    'conversation_id' => $conversationId,
+                ]);
+            }
+        }
 
         $reply = $this->routeIntent($intent, $entities, $nlu);
 
@@ -88,6 +103,7 @@ private function routeIntent(string $intent, array $entities, array $nlu): strin
         'LIST_PRODUCTS'                => $this->handleListAvailableProducts($entities, $nlu),
         'RECOMMEND'                    => $this->handleRecommend(),
         'CONFIRM_ORDER'                => $this->handleConfirmOrder(),
+        'ANALYTICS_REPORT'             => $this->handleAnalyticsReport($nlu),
         default                        => $nlu['reply'] ?? 'Puedo ayudarte a hacer tu pedido. ¿Qué deseas hoy?',
     };
 }
@@ -661,6 +677,88 @@ private function handleOrderHistory(array $entities): string
     return "Aquí están tus últimas compras:\n" . implode("\n", $lines) . "\n\nSi quieres saber los detalles de alguna de estas compras indícame el ID (por ejemplo: 123).";
 }
 
+private function handleAnalyticsReport(array $nlu): string
+{
+    // Texto original para detectar subtipo
+    $text = (string) request()->input('text', '');
+    $t = mb_strtolower($text);
+
+    // Rango de fechas usando tu helper DateRanges
+    [$from, $to] = DateRanges::parse($text);
+    $fromS = $from->toDateTimeString();
+    $toS   = $to->toDateTimeString();
+    $rang  = $this->prettyRange($from, $to);
+
+
+    // Subtipos por palabra clave
+    if (str_contains($t, 'pico') || str_contains($t, 'hora')) {
+        $data = $this->analytics->peakHours($fromS, $toS);
+        if (empty($data) || count($data) === 0) {
+            return "⏰ *Horas pico* - $rang\nNo hay datos en el rango.";
+        }
+        $lines = collect($data)->map(fn($r) =>
+            sprintf("- %02d:00 → %d pedidos (Bs. %.2f)", $r->hour, $r->orders, $r->revenue)
+        )->join("\n");
+        return "⏰ *Horas pico* - $rang\n".$lines;
+    }
+
+    if (str_contains($t, 'market') || str_contains($t, 'carrito')) {
+        $rules = $this->analytics->marketBasket($fromS, $toS, 0.02, 0.1, 20);
+        if (empty($rules)) {
+            return "🧺 *Market basket* - $rang\nNo hay suficientes co-ocurrencias para generar reglas.";
+        }
+        $lines = collect($rules)->map(fn($r) =>
+            "- Si compran *{$r['antecedent']}*, recomienda *{$r['consequent']}* "
+            ."(conf. ".number_format($r['confidence']*100,1)."%, sup. ".number_format($r['support']*100,1)."%)"
+        )->join("\n");
+        return "🧺 *Market basket* - $rang\n".$lines;
+    }
+
+    if (str_contains($t, 'rfm')) {
+        $rfm = $this->analytics->rfm($toS);
+        if (empty($rfm)) {
+            return "👥 *RFM* - $rang\nNo hay clientes con compras registradas.";
+        }
+        $segCounts = collect($rfm)->groupBy('segment')->map->count()->sortDesc()->take(8);
+        $lines = $segCounts->map(fn($c,$seg)=>"- $seg → $c clientes")->join("\n");
+        return "👥 *RFM* - $rang\nSegmentos más frecuentes:\n{$lines}\n\n(333 = mejores; 111 = inactivos)";
+    }
+
+    if (preg_match('/anomal|problem|ca[ií]d|baj[ao]s?|alert|desv[ií]o|rar[oa]s?/u', $t)) {
+
+    $res = $this->analytics->dailyAnomalies($fromS, $toS, 2.0); // z=2.0
+    $rang = $this->prettyRange($from, $to);
+
+    if (empty($res) || empty($res['anomalies'])) {
+        return "📈 *Anomalías de ventas* — $rang\nNo detecté picos ni caídas fuera de lo normal.";
+    }
+
+    $anoms = collect($res['anomalies'])->map(function($a){
+        $tipo = $a['type'] === 'spike' ? '📈 pico' : '📉 caída';
+        $rev  = number_format((float)$a['revenue'], 2);
+        return "- {$a['date']}: {$tipo} (Bs. {$rev}, z={$a['z']})";
+    })->join("\n");
+
+    $mean = number_format((float)($res['mean'] ?? 0), 2);
+    $sd   = number_format((float)($res['sd'] ?? 0), 2);
+
+    return "📈 *Anomalías de ventas* — $rang\n"
+         . $anoms
+         . "\nPromedio diario: Bs. {$mean} (σ={$sd})";
+}
+
+    // Por defecto: Top productos más vendidos
+    $top = $this->analytics->topProducts($fromS, $toS, 10);
+    if (empty($top) || count($top) === 0) {
+        return "📦 *Top productos* - $rang\nNo hay ventas en el rango.";
+    }
+    $lines = collect($top)->map(fn($r) =>
+        "- {$r->name}: {$r->units} uds (Bs. ".number_format($r->revenue,2).")"
+    )->join("\n");
+    return "📦 *Top productos* - $rang\n".$lines;
+}
+
+
 /**
  * Intenta resolver una respuesta numérica cuando el wizard está en 'ask_order_id'.
  * Se puede invocar desde handleWizardStep si añades el case correspondiente:
@@ -821,6 +919,46 @@ private function deductStockForOrder(int $orderId): void
 }
 
 
+private function prettyRange(\Carbon\Carbon $from, \Carbon\Carbon $to): string
+{
+    $fromD = $from->copy(); $toD = $to->copy();
+
+    // atajos
+    $today = now()->startOfDay();
+    $yest  = now()->subDay()->startOfDay();
+    if ($fromD->isSameDay($today) && $toD->isSameDay($today)) {
+        return 'hoy';
+    }
+    if ($fromD->isSameDay($yest) && $toD->isSameDay($yest)) {
+        return 'ayer';
+    }
+
+    // semana actual
+    if ($fromD->isSameDay(now()->startOfWeek()) && $toD->isSameDay(now()->endOfWeek())) {
+        return 'esta semana';
+    }
+    // semana pasada
+    if ($fromD->isSameDay(now()->subWeek()->startOfWeek()) && $toD->isSameDay(now()->subWeek()->endOfWeek())) {
+        return 'la semana pasada';
+    }
+    // mes actual
+    if ($fromD->isSameDay(now()->startOfMonth()) && $toD->isSameDay(now()->endOfMonth())) {
+        return 'este mes';
+    }
+    // mes pasado
+    if ($fromD->isSameDay(now()->subMonth()->startOfMonth()) && $toD->isSameDay(now()->subMonth()->endOfMonth())) {
+        return 'el mes pasado';
+    }
+
+    // fallback: 1–30 sep 2025
+    $mes = [1=>'ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    $fmt = fn($d) => $d->day.' '.$mes[$d->month].' '.$d->year;
+    // si mismo mes/año, usa 1–30 sep 2025
+    if ($fromD->month === $toD->month && $fromD->year === $toD->year) {
+        return $fromD->day.'–'.$toD->day.' '.$mes[$toD->month].' '.$toD->year;
+    }
+    return $fmt($fromD).' a '.$fmt($toD);
+}
 
 
 }
