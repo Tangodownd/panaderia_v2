@@ -578,6 +578,10 @@ Pago: {$pay}".(in_array($pay,['transferencia','pago_movil','zelle'])?" (Ref: {$r
         if (empty($items) && $rawUserText !== '') {
             $items = $this->parseInlineAddExpression($rawUserText);
         }
+        // Segundo intento: parser libre (cuando la frase incluye "quisiera pedir...")
+        if (empty($items) && $rawUserText !== '') {
+            $items = $this->extractItemsFromFreeForm($rawUserText);
+        }
         // Palabras genéricas que no representan realmente un producto
         $genericOrderWords = ['pedido','pedidos','orden','ordenes','compra','compras','mi pedido','un pedido','una orden'];
 
@@ -615,6 +619,7 @@ Pago: {$pay}".(in_array($pay,['transferencia','pago_movil','zelle'])?" (Ref: {$r
 
             foreach ($items as $row) {
                 $raw = trim(mb_strtolower($row['name'] ?? ''));
+                $raw = $this->stripPoliteSuffixes($raw);
                 $qty = max(1, (int)($row['qty'] ?? 1));
                 if ($raw==='') continue;
 
@@ -637,7 +642,26 @@ Pago: {$pay}".(in_array($pay,['transferencia','pago_movil','zelle'])?" (Ref: {$r
                     if($p){$product=$p;break;}
                 }
 
+                if(!$product){
+                    // Intento de coincidencia aproximada (levenshtein sobre candidatos)
+                    $approx = $this->findApproxProduct($raw);
+                    if ($approx) {
+                        $product = $approx;
+                    }
+                }
                 if(!$product){$missing[]=$raw;continue;}
+
+                // Validación de stock al momento de agregar al carrito
+                $available = (int)($product->stock ?? 0);
+                if ($available <= 0) {
+                    $missing[] = $raw.' (sin stock)';
+                    continue;
+                }
+                if ($available < $qty) {
+                    // Ajustar a lo disponible
+                    $qty = $available;
+                }
+                if ($qty <= 0) { $missing[] = $raw.' (sin stock)'; continue; }
 
                 $ci=CartItem::firstOrNew([
                     'cart_id'=>$cart->id,
@@ -655,8 +679,26 @@ Pago: {$pay}".(in_array($pay,['transferencia','pago_movil','zelle'])?" (Ref: {$r
         });
 
         if ($added===0) {
-            if ($missing) return 'No pude encontrar: '.implode(', ',$missing).'. ¿Quieres intentar con otros nombres?';
-            return 'No pude agregar productos. ¿Podrías repetir nombre y cantidad?';
+            if ($missing) {
+                $missingStock = [];$missingNotFound=[];
+                foreach ($missing as $m) {
+                    if (str_contains($m,'(sin stock)')) {
+                        $missingStock[] = trim(str_replace('(sin stock)','',$m));
+                    } else {
+                        $missingNotFound[] = $m;
+                    }
+                }
+                $parts = [];
+                if ($missingNotFound) {
+                    $parts[] = 'No pude identificar: '.implode(', ', $missingNotFound);
+                }
+                if ($missingStock) {
+                    $parts[] = 'Sin stock ahora mismo de '.implode(', ', $missingStock);
+                }
+                $msg = implode('. ', $parts).'. ';
+                return $msg;
+            }
+            return 'No se agregó nada. Indica cantidad y producto. Ej: *2 cachitos* o *agrega 1 golfeado*';
         }
 
         // Si estábamos en el paso inicial, salimos del modo 'ask_first_item'
@@ -665,8 +707,76 @@ Pago: {$pay}".(in_array($pay,['transferencia','pago_movil','zelle'])?" (Ref: {$r
             $this->setStep(null); // limpiamos el step ya que ya hay un ítem real
         }
 
-        if ($missing) return "Añadí {$added} unidad(es). No pude encontrar: ".implode(', ',$missing).". ¿Confirmas o agregas algo más?";
-        return "¡Listo! Añadí {$added} unidad(es) a tu carrito. ¿Deseas confirmar tu pedido o agregar algo más?";
+        // Preparar mensaje base
+        if ($missing) {
+            $missingStock = [];$missingNotFound=[];
+            foreach ($missing as $m) {
+                if (str_contains($m,'(sin stock)')) {
+                    $missingStock[] = trim(str_replace('(sin stock)','',$m));
+                } else {
+                    $missingNotFound[] = $m;
+                }
+            }
+            $detail = [];
+            if ($missingNotFound) $detail[] = 'no identificado: '.implode(', ', $missingNotFound);
+            if ($missingStock) $detail[] = 'sin stock: '.implode(', ', $missingStock);
+            $detailStr = $detail ? (' ('.implode(' | ', $detail).')') : '';
+            $base = "Añadí {$added} unidad(es).".$detailStr.". ¿Confirmas o agregas algo más?";
+        } else {
+            $base = "¡Listo! Añadí {$added} unidad(es) a tu carrito. ¿Deseas confirmar tu pedido o agregar algo más?";
+        }
+
+        // Añadir recomendaciones SI: usuario autenticado, tiene historial y hay sugerencias que no estén en el carrito
+        // Se evita repetir si ya mostramos para la misma "huella" de carrito (productos ordenados) en la sesión actual.
+        $uid = auth()->id();
+        if (!$uid && request()->bearerToken()) {
+            $pat = PersonalAccessToken::findToken(request()->bearerToken());
+            if ($pat) $uid = (int) $pat->tokenable_id;
+        }
+        if ($uid) {
+            // ¿Tiene historial previo (al menos 1 orden completada o pagada)?
+            $hasHistory = Order::where('user_id',$uid)->whereIn('status',[ 'paid','completed','processing','cash_on_delivery' ])->exists();
+            if ($hasHistory) {
+                $cart = $this->getActiveCart(request());
+                $cartIds = $cart ? CartItem::where('cart_id',$cart->id)->pluck('product_id')->map(fn($v)=>(int)$v)->all() : [];
+                $fingerprint = implode('-', collect($cartIds)->sort()->all());
+                $sessionShown = session()->get('rec_shown_fingerprints', []);
+
+                // Solo recomendar si no se ha mostrado ya para esta misma combinación de productos
+                if (!in_array($fingerprint, $sessionShown, true)) {
+                    // 1) Recomendaciones basadas en co-ocurrencia (market basket)
+                    $basket = $this->coOccurrenceRecommendations($cartIds, 6);
+                    // 2) Fallback: historial personal
+                    if (empty($basket)) {
+                        $personal = $this->personalTopProducts($uid, 12); // reutiliza método existente
+                    } else {
+                        $personal = [];
+                    }
+
+                    $candidates = collect(array_merge($basket, $personal));
+                    if ($candidates->isNotEmpty()) {
+                        // Filtrar: quitar ya en carrito, quitar sin stock
+                        $inStockIds = $this->inStockProductIdMap($candidates->pluck('product_id')->all());
+                        $suggest = $candidates
+                            ->reject(fn($p)=> in_array($p['product_id'], $cartIds, true))
+                            ->filter(fn($p)=> isset($inStockIds[$p['product_id']]))
+                            ->unique('product_id')
+                            ->take(3)
+                            ->pluck('name')
+                            ->all();
+                        if (!empty($suggest)) {
+                            $list = '• '.implode("\n• ", $suggest);
+                            $base .= "\n\nTal vez también te interesen:\n{$list}\nPara añadir uno: *agrega 1 nombre_producto*";
+                            // Marcar fingerprint como mostrado
+                            $sessionShown[] = $fingerprint;
+                            session()->put('rec_shown_fingerprints', $sessionShown);
+                        }
+                    }
+                }
+            }
+        }
+
+        return $base;
     }
 
     /**
@@ -675,7 +785,7 @@ Pago: {$pay}".(in_array($pay,['transferencia','pago_movil','zelle'])?" (Ref: {$r
      */
     private function parseInlineAddExpression(string $text): array
     {
-        $verbs = '(agrega|añade|suma|pon|poner|agregar|añadir|sumar)';
+    $verbs = '(agrega|añade|suma|pon|poner|agregar|añadir|sumar|quiero|quisiera|deseo|necesito|me\s+gustaria|me\s+gustaría|podria|podría|ponme|traeme|tráeme|deme|dame)';
         $numsWords = '(un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|docena|media\s+docena)';
         $re = '/^.*?' . $verbs . '\s+(?:' . $numsWords . '|(\d+))?\s*([a-záéíóúñ0-9][a-z0-9áéíóúñ\s-]{1,80})$/iu';
 
@@ -717,7 +827,9 @@ Pago: {$pay}".(in_array($pay,['transferencia','pago_movil','zelle'])?" (Ref: {$r
         }
 
         // Limpiar producto: quitar artículos iniciales y palabras genéricas
-        $product = preg_replace('/^(de\s+|la\s+|el\s+|los\s+|las\s+)/u','', $productPart);
+    $productPart = preg_replace('/^(pedir|ordenar|comprar|solicitar)\s+/iu','', $productPart);
+    $product = preg_replace('/^(de\s+|la\s+|el\s+|los\s+|las\s+)/u','', $productPart);
+    $product = $this->stripPoliteSuffixes($product);
         $product = trim($product);
         if ($product === '') return [];
 
@@ -949,7 +1061,179 @@ private function extractProductQuery(string $intent, array $entities, string $te
 
     private function handleRecommend(): string
     {
-        return 'Hoy te recomendamos probar nuestra torta tres leches 😋.';
+        $uid = auth()->id();
+        if (!$uid && request()->bearerToken()) {
+            $pat = PersonalAccessToken::findToken(request()->bearerToken());
+            if ($pat) $uid = (int) $pat->tokenable_id;
+        }
+
+        // Si no está autenticado
+        if (!$uid) {
+            $global = $this->globalTopProducts(5);
+            if (empty($global)) return 'Aún no tengo suficientes ventas para recomendar. ¿Quieres ver el catálogo?';
+            $lines = collect($global)->map(fn($r)=>"• {$r['name']}".(isset($r['units'])?" ({$r['units']} uds)":""))->implode("\n");
+            return "Algunos de nuestros más populares:\n{$lines}\n\n¿Te gustaría agregar alguno?";
+        }
+
+        $personal = $this->personalTopProducts($uid, 8);
+        $now = now();
+
+        // Filtramos para generar lista de candidatos ordenada por score
+        if (!empty($personal)) {
+            $cart = $this->getActiveCart(request());
+            $cartIds = $cart ? CartItem::where('cart_id',$cart->id)->pluck('product_id')->map(fn($v)=>(int)$v)->all() : [];
+            $inStockIds = $this->inStockProductIdMap(collect($personal)->pluck('product_id')->all());
+            $filteredPersonal = collect($personal)
+                ->reject(fn($p)=> in_array($p['product_id'],$cartIds,true))
+                ->filter(fn($p)=> isset($inStockIds[$p['product_id']]))
+                ->values();
+            if ($filteredPersonal->isNotEmpty()) {
+                $lines = $filteredPersonal->take(5)->map(function($p) use ($now){
+                    $last   = $p['last_date'] ? \Carbon\Carbon::parse($p['last_date']) : null;
+                    $days   = $last ? $last->diffInDays($now) : null;
+                    $recencyTxt = $days === null ? '' : ($days === 0 ? 'hoy' : ($days === 1 ? 'ayer' : "hace {$days} días"));
+                    $reasonParts = [];
+                    if ($p['times']>1) $reasonParts[] = $p['times']." veces";
+                    if ($recencyTxt) $reasonParts[] = $recencyTxt;
+                    $reason = $reasonParts ? ' — '.implode(' · ', $reasonParts) : '';
+                    return '• '.$p['name'].$reason;
+                })->implode("\n");
+                if ($lines) {
+                    return "Basado en tus compras recientes te podría gustar:\n{$lines}\n\nPuedes agregar uno diciendo, por ejemplo: *agrega 2 cachitos*. ¿Quieres otra recomendación más específica?";
+                }
+            }
+        }
+
+        // Fallback si no hay historial o es muy corto: complementos a partir de popularidad global
+        $global = $this->globalTopProducts(5);
+        if (empty($global)) return 'Aún no tengo suficientes datos para recomendar. ¿Quieres decirme qué te gusta?';
+        $lines = collect($global)->map(fn($r)=>"• {$r['name']}")->implode("\n");
+        return "Te recomiendo probar:\n{$lines}\n\n¿Te gustaría añadir alguno?";
+    }
+
+    /**
+     * Productos más comprados por el usuario (frecuencia + recencia)
+     * Devuelve arreglo de: product_id, name, units, times, last_date, score
+     */
+    private function personalTopProducts(int $userId, int $limit = 10): array
+    {
+        // Agregamos ventas últimas 90 días (ajustable)
+        $since = now()->subDays(90);
+        $rows = \DB::table('order_items as oi')
+            ->join('orders as o','o.id','=','oi.order_id')
+            ->join('products as p','p.id','=','oi.product_id')
+            ->where('o.user_id', $userId)
+            ->where('o.created_at','>=',$since)
+            ->selectRaw('oi.product_id, p.name, SUM(oi.quantity) as units, COUNT(*) as times, MAX(o.created_at) as last_date')
+            ->groupBy('oi.product_id','p.name')
+            ->get();
+
+        if ($rows->isEmpty()) return [];
+
+        $now = now();
+        $scored = $rows->map(function($r) use ($now){
+            $last = $r->last_date ? \Carbon\Carbon::parse($r->last_date) : $now->copy()->subDays(365);
+            $days = max(1, $last->diffInDays($now));
+            // Score simple: (units * 1.2 + times) * (1 / log(days+1)+0.5)
+            $score = (($r->units * 1.2) + $r->times) * (1 / (log($days+1)+0.5));
+            return [
+                'product_id' => (int)$r->product_id,
+                'name'       => $r->name,
+                'units'      => (int)$r->units,
+                'times'      => (int)$r->times,
+                'last_date'  => $r->last_date,
+                'score'      => $score,
+            ];
+        })->sortByDesc('score')->values();
+
+        return $scored->take($limit)->all();
+    }
+
+    /**
+     * Top global de productos (últimos 30 días) como fallback o para enriquecer.
+     */
+    private function globalTopProducts(int $limit = 10): array
+    {
+        $since = now()->subDays(30);
+        $rows = \DB::table('order_items as oi')
+            ->join('orders as o','o.id','=','oi.order_id')
+            ->join('products as p','p.id','=','oi.product_id')
+            ->where('o.created_at','>=',$since)
+            ->whereIn('o.status',[ 'paid','completed','processing','cash_on_delivery' ])
+            // 'lines' es palabra reservada (LOAD DATA ... LINES) en MySQL, usar alias distinto
+            ->selectRaw('oi.product_id, p.name, SUM(oi.quantity) as units, COUNT(*) as sale_lines')
+            ->groupBy('oi.product_id','p.name')
+            ->orderByDesc('units')
+            ->limit($limit)
+            ->get();
+
+        if ($rows->isEmpty()) {
+            // fallback: simplemente productos con stock si no hay ventas
+            $fallback = \DB::table('products')->where('stock','>',0)->select('id as product_id','name')->orderByDesc('updated_at')->limit($limit)->get();
+            return $fallback->map(fn($f)=>['product_id'=>$f->product_id,'name'=>$f->name])->all();
+        }
+        return $rows->map(fn($r)=>[
+            'product_id'=>(int)$r->product_id,
+            'name'=>$r->name,
+            'units'=>(int)$r->units,
+        ])->all();
+    }
+
+    /**
+     * Mapa de productos con stock > 0 para filtrar recomendaciones.
+     */
+    private function inStockProductIdMap(array $productIds): array
+    {
+        if (empty($productIds)) return [];
+        $ids = \DB::table('products')
+            ->whereIn('id', $productIds)
+            ->where('stock','>',0)
+            ->pluck('id');
+        $map = [];
+        foreach ($ids as $id) { $map[(int)$id] = true; }
+        return $map;
+    }
+
+    /**
+     * Recomendaciones por co-ocurrencia: productos que aparecen frecuentemente
+     * en las mismas órdenes que cualquiera de los productos del carrito.
+     */
+    private function coOccurrenceRecommendations(array $cartProductIds, int $limit = 6): array
+    {
+        if (empty($cartProductIds)) return [];
+        $since = now()->subDays(60);
+
+        // Órdenes recientes que contienen al menos uno de los productos del carrito
+        $orderIds = \DB::table('order_items as oi')
+            ->join('orders as o','o.id','=','oi.order_id')
+            ->whereIn('oi.product_id', $cartProductIds)
+            ->where('o.created_at','>=',$since)
+            ->whereIn('o.status',[ 'paid','completed','processing','cash_on_delivery' ])
+            ->pluck('o.id')
+            ->unique()
+            ->values();
+        if ($orderIds->isEmpty()) return [];
+
+        $rows = \DB::table('order_items as oi')
+            ->join('products as p','p.id','=','oi.product_id')
+            ->whereIn('oi.order_id', $orderIds)
+            ->whereNotIn('oi.product_id', $cartProductIds)
+            // evitar alias reservado 'lines'
+            ->select('oi.product_id','p.name', \DB::raw('SUM(oi.quantity) as units'), \DB::raw('COUNT(*) as cooc_count'), \DB::raw('MAX(oi.created_at) as last_date'))
+            ->groupBy('oi.product_id','p.name')
+            ->orderByDesc('units')
+            ->limit($limit * 2) // tomar extra antes de filtrar stock
+            ->get();
+        if ($rows->isEmpty()) return [];
+
+        $inStock = $this->inStockProductIdMap($rows->pluck('product_id')->map(fn($v)=>(int)$v)->all());
+        $filtered = $rows->filter(fn($r)=> isset($inStock[(int)$r->product_id]));
+        return $filtered->take($limit)->map(fn($r)=>[
+            'product_id'=>(int)$r->product_id,
+            'name'=>$r->name,
+            'times'=>(int)$r->cooc_count,
+            'last_date'=>$r->last_date,
+        ])->all();
     }
 
     private function handleConfirmOrder(): string
@@ -1078,6 +1362,128 @@ private function prettyRange(\Carbon\Carbon $from, \Carbon\Carbon $to): string
     }
     return $fmt($fromD).' a '.$fmt($toD);
 }
+
+    /**
+     * Elimina cortesías y fragmentos añadidos al final que no forman parte del nombre real del producto.
+     * Ej: "croissant por favor", "pan campesino gracias", "golfeados porfa".
+     */
+    private function stripPoliteSuffixes(string $text): string
+    {
+        $t = trim($text);
+        if ($t === '') return $t;
+        // Normalizar acentos para comparar algunas variantes
+        $lower = mb_strtolower($t);
+        $lower = strtr($lower, ['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u']);
+
+        // Expresiones de cortesía comunes (solo si van al final)
+        $patterns = [
+            '/\bpor\s+favor\b$/u',
+            '/\bporfavor\b$/u',
+            '/\bporfa\b$/u',
+            '/\bporfis\b$/u',
+            '/\bgracias\b$/u',
+            '/\bpor\s+fa\b$/u',
+            '/\bme\s+das\b$/u',
+            '/\bpor\s+favorcito\b$/u'
+        ];
+        foreach ($patterns as $re) {
+            $lower = preg_replace($re,'', $lower);
+        }
+        // quitar conectores residuales al final
+        $lower = preg_replace('/[.,;:!¡¿?]+$/u','', $lower);
+        $lower = trim($lower);
+
+        // Si quedó un fragmento cortado como "croissant vor" (residuo de 'por favor') lo limpiamos
+        // Detectar secuencias finales ' por', ' favor', ' vor'
+        $courtesyTailTokens = ['por','favor','vor'];
+        $parts = preg_split('/\s+/u', $lower);
+        while (!empty($parts)) {
+            $last = end($parts);
+            if (in_array($last, $courtesyTailTokens, true)) {
+                array_pop($parts);
+                continue;
+            }
+            break;
+        }
+        $lower = trim(implode(' ', $parts));
+        return $lower === '' ? $t : $lower;
+    }
+
+    /**
+     * Parser adicional libre para frases tipo: "quisiera pedir dos croissant porfavor"
+     * Devuelve array de items (name, qty) si detecta uno.
+     */
+    private function extractItemsFromFreeForm(string $text): array
+    {
+        $orig = mb_strtolower(trim($text));
+        if ($orig === '') return [];
+        $clean = $this->stripPoliteSuffixes($orig);
+        // eliminar verbos de intención al inicio
+        $clean = preg_replace('/^(quiero|quisiera|deseo|necesito|me\s+gustaria|me\s+gustaría|podria|podría|voy\s+a|vengo\s+a|para\s+pedir)\s+/u','', $clean);
+        $clean = preg_replace('/^(pedir|ordenar|comprar|solicitar)\s+/u','', $clean);
+        $clean = trim($clean);
+
+        $map = [
+            'un'=>1,'una'=>1,'uno'=>1,
+            'dos'=>2,'tres'=>3,'cuatro'=>4,'cinco'=>5,'seis'=>6,'siete'=>7,'ocho'=>8,'nueve'=>9,'diez'=>10,
+            'media docena'=>6,'docena'=>12
+        ];
+
+        // Detectar cantidad palabra compuesta "media docena" primero
+        if (preg_match('/^(media\s+docena)\s+(.+)$/u',$clean,$m)) {
+            $qty = 6; $name = trim($m[2]);
+            $name = $this->stripPoliteSuffixes($name);
+            if ($name!=='') return [[ 'name'=>$name, 'qty'=>$qty ]];
+        }
+
+        // General: (qtyWord|number)? product+  (al menos 1 token de producto)
+        if (preg_match('/^(un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|\d+)\s+(.+)$/u',$clean,$m)) {
+            $rawQty = $m[1];
+            $name = trim($m[2]);
+            $qty = isset($map[$rawQty]) ? $map[$rawQty] : (ctype_digit($rawQty)? max(1,(int)$rawQty):1);
+            $name = $this->stripPoliteSuffixes($name);
+            // quitar artículos iniciales redundantes
+            $name = preg_replace('/^(de\s+|la\s+|el\s+|los\s+|las\s+)/u','', $name);
+            if ($name!=='') return [[ 'name'=>$name, 'qty'=>$qty ]];
+        }
+
+        // fallback: si empieza con un producto sin cantidad explícita asumimos 1
+        // Tomar primeras 3 palabras como posible producto si contiene letras
+        if (preg_match('/^([a-záéíóúñ0-9][a-z0-9áéíóúñ\s-]{2,80})$/u',$clean,$m)) {
+            $name = trim($m[1]);
+            $name = $this->stripPoliteSuffixes($name);
+            if ($name!=='') return [[ 'name'=>$name, 'qty'=>1 ]];
+        }
+        return [];
+    }
+
+    /**
+     * Búsqueda aproximada si el matching directo no encontró producto.
+     */
+    private function findApproxProduct(string $raw): ?Product
+    {
+        $norm = preg_replace('/\s+/u',' ', trim($raw));
+        if ($norm==='') return null;
+        // tokens significativos (>=2 chars)
+        $tokens = array_filter(preg_split('/\s+/u',$norm), fn($t)=>mb_strlen($t)>=2);
+        if (!$tokens) return null;
+        $q = Product::query();
+        foreach ($tokens as $tk) {
+            $q->orWhere('name','like','%'.$tk.'%');
+        }
+        $candidates = $q->limit(25)->get();
+        if ($candidates->isEmpty()) return null;
+        $best = null; $bestDist = 999;
+        $target = $this->normalizeProdFragment($norm);
+        foreach ($candidates as $cand) {
+            $candNorm = $this->normalizeProdFragment($cand->name);
+            $dist = levenshtein($target, $candNorm);
+            $len = max(mb_strlen($target), mb_strlen($candNorm));
+            $threshold = $len <= 8 ? 2 : ($len <= 14 ? 3 : 4);
+            if ($dist <= $threshold && $dist < $bestDist) { $best = $cand; $bestDist = $dist; }
+        }
+        return $best;
+    }
 
 
 

@@ -87,6 +87,50 @@ class AdminChatController extends Controller
         $fromS = $from->toDateTimeString();
         $toS   = $to->toDateTimeString();
 
+        if (str_contains($t, 'tendencia') || str_contains($t,'trend')) {
+            // detectar producto tras palabra 'de' o último token relevante
+            $pattern = '/tendencia(?:\s+de)?\s+([\p{L}\p{N}\s_-]{2,40})/u';
+            $productQ = null;
+            if (preg_match($pattern, $t, $m)) {
+                $productQ = trim($m[1]);
+            } else {
+                // fallback: buscar última palabra no genérica
+                $tokens = array_filter(preg_split('/\s+/u',$t));
+                $stop = ['cual','es','la','el','de','del','las','los','tendencia','trend'];
+                $candidate = null;
+                foreach (array_reverse($tokens) as $tok) {
+                    if (in_array($tok,$stop,true)) continue; $candidate=$tok; break;
+                }
+                $productQ = $candidate;
+            }
+            if (!$productQ) return "📈 Indica el producto: *tendencia croissant*";
+            $trend = $this->analytics->productTrend($fromS,$toS,$productQ);
+            if (!$trend) return "📈 No encontré datos para '$productQ' en el rango.";
+            $seriesTxt = collect($trend['series'])->take(7)->map(fn($r)=> $r['date'].': '.$r['units'])->join(', ');
+            return "📈 *Tendencia* {$trend['product']} — avg7: {$trend['avg7']} uds, crecimiento: {$trend['growth_pct']}%\nÚltimos días: {$seriesTxt}";
+        }
+
+        if (str_contains($t, 'categoria') || str_contains($t,'categoría') || str_contains($t,'category share')) {
+            $share = $this->analytics->categoryShare($fromS,$toS,8);
+            if (!$share) return "📊 *Participación por categoría* — sin datos";
+            $lines = collect($share)->map(fn($c)=>"- {$c['category']}: ".number_format($c['share'],2)."% (Bs. ".number_format($c['revenue'],2).")")->join("\n");
+            return "📊 *Participación por categoría* — $fromS → $toS\n$lines";
+        }
+
+        if (str_contains($t,'abc') || str_contains($t,'clasificacion') || str_contains($t,'clasificación')) {
+            $abc = $this->analytics->inventoryABC($fromS,$toS);
+            if (!$abc) return "🔤 *ABC* — sin ventas";
+            $lines = collect($abc)->take(12)->map(fn($r)=>"- {$r['class']} {$r['name']} ({$r['cum_share']}% acumulado)")->join("\n");
+            return "🔤 *Clasificación ABC* — (A≈80%, B≈95%)\n$lines";
+        }
+
+        if (str_contains($t,'anomalia') || str_contains($t,'anomalía') || str_contains($t,'pico raro') || str_contains($t,'caida') || str_contains($t,'caída')) {
+            $anom = $this->analytics->dailyAnomalies($fromS,$toS,2.2);
+            if (!$anom || empty($anom['anomalies'])) return "⚠️ *Anomalías* — No se detectaron picos o caídas significativos.";
+            $lines = collect($anom['anomalies'])->map(fn($a)=>"- {$a['date']}: {$a['type']} (z={$a['z']}) Bs. ".number_format($a['revenue'],2))->join("\n");
+            return "⚠️ *Anomalías de ingresos*\n$lines";
+        }
+
         if (str_contains($t, 'pico') || str_contains($t, 'hora')) {
             $data = $this->analytics->peakHours($fromS, $toS);
             if (!$data) return "⏰ *Horas pico* — $fromS → $toS\nNo hay datos en el rango.";
@@ -165,6 +209,6 @@ class AdminChatController extends Controller
             return "🎯 *Acciones sugeridas*\n- Reactivar: {$a['reactivar']} clientes (cupón/whatsapp)\n- Fidelizar: {$a['fidelizar']} (club/upsell)\n- Atención: {$a['atencion']} (recordatorios y combos)";
         }
 
-        return "¿Qué necesitas? (*stock recomendado*, *plan de producción*, combos, acciones RFM, top, horas pico, market basket, RFM)";
+        return "¿Qué necesitas? (*stock recomendado*, *plan de producción*, combos, acciones RFM, top, horas pico, market basket, RFM, tendencia producto, participación categoría, ABC, anomalías)";
     }
 }

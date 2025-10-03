@@ -202,6 +202,112 @@ class AnalyticsService
         return ['series'=>$rows, 'anomalies'=>$out, 'mean'=>$mean, 'sd'=>$sd];
     }
 
+    /**
+     * Tendencia diaria de un producto por nombre (LIKE) o ID.
+     * Devuelve: [series: [[date, units]], avg7, growth_pct]
+     */
+    public function productTrend(string $from, string $to, string $productQuery): ?array
+    {
+        // Resolver producto (ID directo o nombre)
+        $product = null;
+        if (ctype_digit($productQuery)) {
+            $product = DB::table('products')->where('id',(int)$productQuery)->first();
+        }
+        if (!$product) {
+            $product = DB::table('products')->where('name','like','%'.$productQuery.'%')->orderBy('id')->first();
+        }
+        if (!$product) return null;
+
+        $pid = $product->id;
+        $rows = DB::table('order_items as oi')
+            ->join('orders as o','o.id','=','oi.order_id')
+            ->whereIn('o.status',['paid','completed'])
+            ->where('oi.product_id',$pid)
+            ->whereBetween('o.created_at', [$from,$to])
+            ->select(DB::raw('DATE(o.created_at) as d'), DB::raw('SUM(oi.quantity) as units'))
+            ->groupBy(DB::raw('DATE(o.created_at)'))
+            ->orderBy('d')
+            ->get();
+        if ($rows->isEmpty()) return [ 'product'=>$product->name, 'series'=>[], 'avg7'=>0, 'growth_pct'=>0 ];
+
+        $series = [];
+        foreach ($rows as $r) { $series[] = ['date'=>$r->d, 'units'=>(float)$r->units]; }
+        // 7-day moving average (últimos 7 puntos si hay <=30d)
+        $last7 = array_slice(array_column($series,'units'), -7);
+        $avg7 = count($last7)? array_sum($last7)/count($last7):0;
+        // Crecimiento: (últimos 3 días promedio) vs (primeros 3 días promedio) si suficientes puntos
+        $first3 = array_slice(array_column($series,'units'),0,3);
+        $last3  = array_slice(array_column($series,'units'),-3);
+        $g1 = count($first3)? array_sum($first3)/count($first3):0;
+        $g2 = count($last3)? array_sum($last3)/count($last3):0;
+        $growth = ($g1>0)? (($g2-$g1)/$g1)*100 : ($g2>0?100:0);
+        return [
+            'product'=>$product->name,
+            'series'=>$series,
+            'avg7'=>round($avg7,2),
+            'growth_pct'=>round($growth,1)
+        ];
+    }
+
+    /**
+     * Participación de categorías en revenue (top N) en intervalo.
+     */
+    public function categoryShare(string $from, string $to, int $limit=8): array
+    {
+        // Se asume tabla categories(id,name)
+        $rows = DB::table('order_items as oi')
+            ->join('orders as o','o.id','=','oi.order_id')
+            ->join('products as p','p.id','=','oi.product_id')
+            ->leftJoin('categories as c','c.id','=','p.category_id')
+            ->whereBetween('o.created_at', [$from,$to])
+            ->whereIn('o.status',['paid','completed'])
+            ->select(DB::raw('COALESCE(c.name,"(Sin categoría)") as category'), DB::raw('SUM(oi.quantity*oi.price) as revenue'))
+            ->groupBy('category')
+            ->orderByDesc('revenue')
+            ->get();
+        if ($rows->isEmpty()) return [];
+        $total = $rows->sum('revenue');
+        return $rows->take($limit)->map(fn($r)=>[
+            'category'=>$r->category,
+            'revenue'=>(float)$r->revenue,
+            'share'=> $total>0? round(($r->revenue/$total)*100,2):0,
+        ])->all();
+    }
+
+    /**
+     * Clasificación ABC de productos por participación acumulada de revenue.
+     */
+    public function inventoryABC(string $from, string $to): array
+    {
+        $rows = DB::table('order_items as oi')
+            ->join('orders as o','o.id','=','oi.order_id')
+            ->join('products as p','p.id','=','oi.product_id')
+            ->whereBetween('o.created_at', [$from,$to])
+            ->whereIn('o.status',['paid','completed'])
+            ->select('oi.product_id','p.name', DB::raw('SUM(oi.quantity*oi.price) as revenue'))
+            ->groupBy('oi.product_id','p.name')
+            ->orderByDesc('revenue')
+            ->get();
+        if ($rows->isEmpty()) return [];
+        $total = $rows->sum('revenue');
+        $cum = 0; $out=[];
+        foreach ($rows as $r) {
+            $cum += $r->revenue;
+            $share = $total>0? ($r->revenue/$total):0;
+            $cumShare = $total>0? ($cum/$total):0;
+            $class = $cumShare <= 0.8 ? 'A' : ($cumShare <=0.95 ? 'B':'C');
+            $out[] = [
+                'product_id'=>$r->product_id,
+                'name'=>$r->name,
+                'revenue'=>(float)$r->revenue,
+                'share'=> round($share*100,2),
+                'cum_share'=> round($cumShare*100,2),
+                'class'=>$class,
+            ];
+        }
+        return $out;
+    }
+
     // --- helpers ---
     private function cuts(array $sortedValues) {
         $n = count($sortedValues);
