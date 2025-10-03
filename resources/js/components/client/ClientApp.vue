@@ -270,7 +270,7 @@ export default {
       this.text = ''
 
       try {
-        const { data } = await axios.post('/api/chat/process', { session_id: this.sid, text: t })
+        const { data } = await axios.post('/api/chat/customer', { session_id: this.sid, text: t })
         const reply = data?.reply || 'Entendido.'
         this.messages.push({ id: Date.now() + 1, role: 'assistant', text: reply })
         if (!this.chatOpen) this.unread++

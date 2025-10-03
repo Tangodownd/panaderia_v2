@@ -16,8 +16,6 @@ use Illuminate\Support\Facades\Log;
 use App\Models\OrderItem;
 use App\Models\Order;
 use Laravel\Sanctum\PersonalAccessToken;
-use App\Services\AnalyticsService;
-use App\Support\DateRanges;
 
 
 class ChatProcessController extends Controller
@@ -25,7 +23,7 @@ class ChatProcessController extends Controller
     public function __construct(
         private OrderService $orderService,
         private WhatsAppService $whatsapp,
-        private AnalyticsService $analytics
+
     ) {}
 
     public function process(Request $req, AiClient $ai)
@@ -103,7 +101,7 @@ private function routeIntent(string $intent, array $entities, array $nlu): strin
         'LIST_PRODUCTS'                => $this->handleListAvailableProducts($entities, $nlu),
         'RECOMMEND'                    => $this->handleRecommend(),
         'CONFIRM_ORDER'                => $this->handleConfirmOrder(),
-        'ANALYTICS_REPORT'             => $this->handleAnalyticsReport($nlu),
+
         default                        => $nlu['reply'] ?? 'Puedo ayudarte a hacer tu pedido. ¿Qué deseas hoy?',
     };
 }
@@ -198,18 +196,57 @@ private function routeIntent(string $intent, array $entities, array $nlu): strin
                 $addr = Str::limit(trim($text), 180, '');
                 if (mb_strlen($addr) < 3) return 'Necesito una dirección válida (o escribe *Retiro en tienda*).';
                 $this->setStep('ask_payment_method', ['address' => $addr]);
-                return '¿Cómo deseas pagar? (efectivo / transferencia / pago móvil / zelle)';
+                // En este punto mostramos también un resumen y explicamos opciones siguientes.
+                $summary = $this->summaryMessage();
+                return $summary . "\n\n¿Cómo deseas pagar? (efectivo / transferencia / pago móvil / zelle)\n\n".
+                    "También puedes escribir: *quitar X*, *agregar Y*, *cancelar pedido* o *ayuda*.";
 
             case 'ask_payment_method':
-                $pm = $this->normalizePaymentMethod($text);
-                if (!$pm) return 'Método no reconocido. Opciones: efectivo, transferencia, pago móvil o zelle.';
+                $tLower = Str::lower($text);
+                // Opción 3: cancelar
+                if (Str::contains($tLower, ['cancel','cancelo','cancelar'])) {
+                    $this->clearFlow();
+                    return 'Pedido cancelado ✅. Puedes empezar otro cuando quieras.';
+                }
+                // Opción 2: quitar producto (patrón: quitar X / eliminar X / remover X)
+                if (preg_match('/\b(quita|quitar|elimina|eliminar|remueve|remover)\s+(.{2,60})/iu', $text, $mm)) {
+                    $prodTxt = trim($mm[2]);
+                    $removed = $this->removeProductApprox($prodTxt);
+                    $summary = $this->summaryMessage();
+                    if ($removed) {
+                        return "Eliminé *{$removed}* del carrito.\n\n".$summary."\n¿Método de pago? (efectivo / transferencia / pago móvil / zelle)";
+                    }
+                    return "No encontré ese producto en tu carrito. Intenta con el nombre exacto.\n\n".$summary;
+                }
+                // Opción 2 (b): agregar algo más aquí mismo: detectamos verbo agregar + cantidad/nombre
+                if (preg_match('/\b(agrega|añade|agregar|añadir|suma|pon)\b/iu', $tLower)) {
+                    // Enviamos la frase al flujo normal de addToCart reutilizando handleAddToCart
+                    // Para no romper el step actual, solo procesamos y regresamos a ask_payment_method
+                    $fakeEntities = ['items'=>[]];
+                    $addReply = $this->handleAddToCart($fakeEntities); // parseará fallback inline
+                    // Forzamos regresar al mismo paso (si no entró en confirmación)
+                    $this->setStep('ask_payment_method', array_merge($this->getChatState()->data ?? [], []));
+                    if (Str::startsWith($addReply, 'Perfecto') || Str::contains($addReply, 'Indícame producto')) {
+                        // No agregó nada todavía
+                        return $addReply;
+                    }
+                    return $addReply."\n\n".$this->summaryMessage()."\n¿Método de pago ahora? (efectivo / transferencia / pago móvil / zelle)";
+                }
+                // Opción 4: otra pregunta (si detectamos palabras clave de ayuda / horario / ubicación, devolvemos al mini IA)
+                if (Str::contains($tLower, ['ayuda','horario','ubicacion','ubicación','metodos','pago','donde'])) {
+                    return 'Respondo primero tu duda: escribe tu pregunta concreta o si prefieres continúa indicando método de pago.';
+                }
 
+                // Opción 1: método de pago
+                $pm = $this->normalizePaymentMethod($text);
+                if (!$pm) {
+                    return 'Método no reconocido. Opciones: efectivo, transferencia, pago móvil o zelle. También puedes: *quitar X*, *agregar Y*, *cancelar pedido*.';
+                }
                 if (in_array($pm, ['transfer','mobile','zelle'])) {
                     $this->setStep('ask_payment_reference', ['payment_method' => $pm]);
                     $datos = $this->bankInstructionsFor($pm);
                     return $datos . "\n\nIndica el número de referencia o últimos 4 dígitos.\n(Al enviarla, cerraremos tu pedido automáticamente)";
                 }
-
                 $this->setStep('confirm_summary', ['payment_method' => $pm]);
                 return $this->summaryMessage()." ¿Confirmas tu pedido? (sí/no)";
 
@@ -294,6 +331,75 @@ Nombre: ".($st['name']??'—')."
 Teléfono: ".($st['phone']??'—')."
 Dirección: ".($st['address']??'—')."
 Pago: {$pay}".(in_array($pay,['transferencia','pago_movil','zelle'])?" (Ref: {$ref})":"");
+    }
+
+    /**
+     * Elimina un producto (match aproximado) del carrito activo.
+     */
+    private function removeProductApprox(string $needle): ?string
+    {
+        $origNeedle = trim($needle);
+        $needle = $this->normalizeProdFragment($origNeedle);
+        if ($needle === '') return null;
+
+        $cart = $this->getActiveCart(request());
+        if (!$cart) return null;
+        $items = CartItem::where('cart_id',$cart->id)->with('product')->get();
+
+        // Genera variantes (singular básico)
+        $variants = [$needle];
+        if (preg_match('/s$/u', $needle) && mb_strlen($needle) > 3) {
+            $variants[] = rtrim($needle,'s');
+        }
+        if (preg_match('/es$/u',$needle) && mb_strlen($needle) > 4) {
+            $variants[] = preg_replace('/es$/u','',$needle);
+        }
+        $variants = array_unique($variants);
+
+        // Stopwords para tokens
+        $stop = ['el','la','los','las','un','una','unos','unas','de','del','al'];
+
+        foreach ($items as $ci) {
+            $pName = $ci->product->name;
+            $norm = $this->normalizeProdFragment($pName);
+
+            // 1. coincidencia exacta con alguna variante
+            foreach ($variants as $v) {
+                if ($norm === $v) {
+                    $nm = $pName; $ci->delete(); $this->recomputeCartTotal($cart); return $nm; }
+            }
+            // 2. contains
+            foreach ($variants as $v) {
+                if ($v !== '' && str_contains($norm, $v)) {
+                    $nm = $pName; $ci->delete(); $this->recomputeCartTotal($cart); return $nm; }
+            }
+            // 3. tokens subset (todas las tokens del needle están en el nombre)
+            $needleTokens = array_values(array_filter(preg_split('/\s+/u',$needle), fn($t)=> $t!=='' && !in_array($t,$stop,true)));
+            if ($needleTokens) {
+                $all = true;
+                foreach ($needleTokens as $tk) {
+                    if (!str_contains($norm,$tk)) { $all=false; break; }
+                }
+                if ($all) { $nm = $pName; $ci->delete(); $this->recomputeCartTotal($cart); return $nm; }
+            }
+        }
+        return null;
+    }
+
+    private function normalizeProdFragment(string $s): string
+    {
+        $s = mb_strtolower($s);
+        $s = strtr($s,[ 'á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ñ'=>'n' ]);
+        $s = preg_replace('/^(el|la|los|las|un|una|unos|unas)\s+/u','',$s);
+        $s = preg_replace('/\s+/u',' ', $s);
+        $s = trim($s, " -_:");
+        return $s;
+    }
+
+    private function recomputeCartTotal(Cart $cart): void
+    {
+        $cart->total = CartItem::where('cart_id',$cart->id)->get()->reduce(fn($a,$i)=>$a+($i->price*$i->quantity),0);
+        $cart->save();
     }
 
     private function createOrderFromChatCash(): string
@@ -465,7 +571,39 @@ Pago: {$pay}".(in_array($pay,['transferencia','pago_movil','zelle'])?" (Ref: {$r
     {
         $sessionId = session()->getId();
         $items = $entities['items'] ?? [];
-        if (empty($items)) return '¿Qué producto deseas agregar y cuántas unidades?';
+        $rawUserText = mb_strtolower(trim((string) request()->input('text','')));
+
+        // Fallback interno: si la NLU no extrajo items, intentamos parsear expresiones tipo
+        // "agrega dos cachitos", "añade 3 golfeados", "pon 1 pan campesino".
+        if (empty($items) && $rawUserText !== '') {
+            $items = $this->parseInlineAddExpression($rawUserText);
+        }
+        // Palabras genéricas que no representan realmente un producto
+        $genericOrderWords = ['pedido','pedidos','orden','ordenes','compra','compras','mi pedido','un pedido','una orden'];
+
+        // Normalizar y filtrar placeholders
+        $filtered = [];
+        foreach ($items as $it) {
+            $nameNorm = trim(mb_strtolower($it['name'] ?? ''));
+            // Si el nombre coincide EXACTO con una palabra genérica lo ignoramos
+            if ($nameNorm === '' ) continue;
+            $plain = preg_replace('/\s+/', ' ', $nameNorm);
+            if (in_array($plain, $genericOrderWords, true)) continue;
+            $filtered[] = $it;
+        }
+
+        // Si tras filtrar no queda nada, interpretamos que el usuario solo expresó la intención de iniciar pedido
+        if (empty($filtered)) {
+            $state = $this->getChatState();
+            if (($state->step ?? null) !== 'ask_first_item') {
+                $this->setStep('ask_first_item', []);
+                return 'Perfecto 👍 Empecemos tu pedido. Dime producto y cantidad. Ej: *agrega 2 cachitos* o *1 pan campesino*';
+            }
+            return 'Indícame producto y cantidad. Ej: *2 golfeados*, *agrega 1 pan campesino*';
+        }
+
+        // Trabajamos con los ítems reales filtrados
+        $items = $filtered;
 
         $added = 0; $missing = [];
 
@@ -521,8 +659,69 @@ Pago: {$pay}".(in_array($pay,['transferencia','pago_movil','zelle'])?" (Ref: {$r
             return 'No pude agregar productos. ¿Podrías repetir nombre y cantidad?';
         }
 
+        // Si estábamos en el paso inicial, salimos del modo 'ask_first_item'
+        $state = $this->getChatState();
+        if (($state->step ?? null) === 'ask_first_item') {
+            $this->setStep(null); // limpiamos el step ya que ya hay un ítem real
+        }
+
         if ($missing) return "Añadí {$added} unidad(es). No pude encontrar: ".implode(', ',$missing).". ¿Confirmas o agregas algo más?";
         return "¡Listo! Añadí {$added} unidad(es) a tu carrito. ¿Deseas confirmar tu pedido o agregar algo más?";
+    }
+
+    /**
+     * Parsea frases de agregado simples cuando la NLU no detectó items.
+     * Devuelve un arreglo de items con claves name y qty.
+     */
+    private function parseInlineAddExpression(string $text): array
+    {
+        $verbs = '(agrega|añade|suma|pon|poner|agregar|añadir|sumar)';
+        $numsWords = '(un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|docena|media\s+docena)';
+        $re = '/^.*?' . $verbs . '\s+(?:' . $numsWords . '|(\d+))?\s*([a-záéíóúñ0-9][a-z0-9áéíóúñ\s-]{1,80})$/iu';
+
+        if (!preg_match($re, $text, $m)) {
+            return [];
+        }
+
+        // Determinar cantidad
+        $wordQty = $m[3] ?? null; // según grupos del regex tras verb + (qty)
+        $digitQty = isset($m[4]) ? $m[4] : null; // grupo de dígitos opcional
+        // Ajustar: debido al patrón, reindexar cuidadosamente
+        // Estructura esperada: [0]=full [1]=... antes? no; validamos con dump mental
+        // Simplificamos: volvamos a hacer otro regex más explícito si hay dudas.
+        $qty = 1;
+
+        // Mejor segundo intento más simple para separar cantidad por palabras
+        $simple = '/^(?:' . $verbs . ')\s+((?:' . $numsWords . '|\d+)?)\s*(.+)$/iu';
+        if (preg_match($simple, $text, $mm)) {
+            $rawQty = trim($mm[2] ?? '');
+            $productPart = trim($mm[3] ?? '');
+        } else {
+            // fallback al primer match
+            $productPart = trim($m[count($m)-1] ?? '');
+            $rawQty = '';
+        }
+
+        $map = [
+            'un'=>1,'una'=>1,'uno'=>1,
+            'dos'=>2,'tres'=>3,'cuatro'=>4,'cinco'=>5,'seis'=>6,'siete'=>7,'ocho'=>8,'nueve'=>9,'diez'=>10,
+            'media docena'=>6,'docena'=>12
+        ];
+        $rn = mb_strtolower($rawQty);
+        if ($rn !== '') {
+            if (isset($map[$rn])) {
+                $qty = $map[$rn];
+            } elseif (ctype_digit($rn)) {
+                $qty = max(1, (int)$rn);
+            }
+        }
+
+        // Limpiar producto: quitar artículos iniciales y palabras genéricas
+        $product = preg_replace('/^(de\s+|la\s+|el\s+|los\s+|las\s+)/u','', $productPart);
+        $product = trim($product);
+        if ($product === '') return [];
+
+        return [[ 'name'=>$product, 'qty'=>$qty ]];
     }
 
 private function handleCheckStock(array $entities): string
@@ -677,86 +876,6 @@ private function handleOrderHistory(array $entities): string
     return "Aquí están tus últimas compras:\n" . implode("\n", $lines) . "\n\nSi quieres saber los detalles de alguna de estas compras indícame el ID (por ejemplo: 123).";
 }
 
-private function handleAnalyticsReport(array $nlu): string
-{
-    // Texto original para detectar subtipo
-    $text = (string) request()->input('text', '');
-    $t = mb_strtolower($text);
-
-    // Rango de fechas usando tu helper DateRanges
-    [$from, $to] = DateRanges::parse($text);
-    $fromS = $from->toDateTimeString();
-    $toS   = $to->toDateTimeString();
-    $rang  = $this->prettyRange($from, $to);
-
-
-    // Subtipos por palabra clave
-    if (str_contains($t, 'pico') || str_contains($t, 'hora')) {
-        $data = $this->analytics->peakHours($fromS, $toS);
-        if (empty($data) || count($data) === 0) {
-            return "⏰ *Horas pico* - $rang\nNo hay datos en el rango.";
-        }
-        $lines = collect($data)->map(fn($r) =>
-            sprintf("- %02d:00 → %d pedidos (Bs. %.2f)", $r->hour, $r->orders, $r->revenue)
-        )->join("\n");
-        return "⏰ *Horas pico* - $rang\n".$lines;
-    }
-
-    if (str_contains($t, 'market') || str_contains($t, 'carrito')) {
-        $rules = $this->analytics->marketBasket($fromS, $toS, 0.02, 0.1, 20);
-        if (empty($rules)) {
-            return "🧺 *Market basket* - $rang\nNo hay suficientes co-ocurrencias para generar reglas.";
-        }
-        $lines = collect($rules)->map(fn($r) =>
-            "- Si compran *{$r['antecedent']}*, recomienda *{$r['consequent']}* "
-            ."(conf. ".number_format($r['confidence']*100,1)."%, sup. ".number_format($r['support']*100,1)."%)"
-        )->join("\n");
-        return "🧺 *Market basket* - $rang\n".$lines;
-    }
-
-    if (str_contains($t, 'rfm')) {
-        $rfm = $this->analytics->rfm($toS);
-        if (empty($rfm)) {
-            return "👥 *RFM* - $rang\nNo hay clientes con compras registradas.";
-        }
-        $segCounts = collect($rfm)->groupBy('segment')->map->count()->sortDesc()->take(8);
-        $lines = $segCounts->map(fn($c,$seg)=>"- $seg → $c clientes")->join("\n");
-        return "👥 *RFM* - $rang\nSegmentos más frecuentes:\n{$lines}\n\n(333 = mejores; 111 = inactivos)";
-    }
-
-    if (preg_match('/anomal|problem|ca[ií]d|baj[ao]s?|alert|desv[ií]o|rar[oa]s?/u', $t)) {
-
-    $res = $this->analytics->dailyAnomalies($fromS, $toS, 2.0); // z=2.0
-    $rang = $this->prettyRange($from, $to);
-
-    if (empty($res) || empty($res['anomalies'])) {
-        return "📈 *Anomalías de ventas* — $rang\nNo detecté picos ni caídas fuera de lo normal.";
-    }
-
-    $anoms = collect($res['anomalies'])->map(function($a){
-        $tipo = $a['type'] === 'spike' ? '📈 pico' : '📉 caída';
-        $rev  = number_format((float)$a['revenue'], 2);
-        return "- {$a['date']}: {$tipo} (Bs. {$rev}, z={$a['z']})";
-    })->join("\n");
-
-    $mean = number_format((float)($res['mean'] ?? 0), 2);
-    $sd   = number_format((float)($res['sd'] ?? 0), 2);
-
-    return "📈 *Anomalías de ventas* — $rang\n"
-         . $anoms
-         . "\nPromedio diario: Bs. {$mean} (σ={$sd})";
-}
-
-    // Por defecto: Top productos más vendidos
-    $top = $this->analytics->topProducts($fromS, $toS, 10);
-    if (empty($top) || count($top) === 0) {
-        return "📦 *Top productos* - $rang\nNo hay ventas en el rango.";
-    }
-    $lines = collect($top)->map(fn($r) =>
-        "- {$r->name}: {$r->units} uds (Bs. ".number_format($r->revenue,2).")"
-    )->join("\n");
-    return "📦 *Top productos* - $rang\n".$lines;
-}
 
 
 /**
@@ -959,6 +1078,9 @@ private function prettyRange(\Carbon\Carbon $from, \Carbon\Carbon $to): string
     }
     return $fmt($fromD).' a '.$fmt($toD);
 }
+
+
+
 
 
 }

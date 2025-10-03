@@ -95,7 +95,8 @@
         delete axios.defaults.headers.common['Authorization'];
         
         // Redirigir al login
-        router.push({ name: 'adminLogin' });
+  try { window.dispatchEvent(new Event('auth-changed')) } catch {}
+  router.push({ name: 'adminLogin' });
       }
     };
     

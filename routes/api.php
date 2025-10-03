@@ -17,7 +17,7 @@ use App\Http\Controllers\TwilioWebhookController;
 use App\Http\Controllers\ChatMessagesController;
 use App\Http\Controllers\CustomerAuthController;
 use App\Http\Controllers\AnalyticsController;
-
+use App\Http\Controllers\AdminChatController;
 
 /*
 |--------------------------------------------------------------------------
@@ -73,15 +73,6 @@ Route::prefix('cart')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| Chat (validación stock real / confirmación con reserva)
-|--------------------------------------------------------------------------
-*/
-Route::prefix('chat')->group(function () {
-    Route::post('/process', [ChatProcessController::class, 'process']);
-});
-Route::get('/chat/messages', [ChatMessagesController::class, 'index']);
-/*
-|--------------------------------------------------------------------------
 | Órdenes (público)
 |--------------------------------------------------------------------------
 */
@@ -102,6 +93,20 @@ Route::get('/api/products/check-availability', [ProductController::class, 'check
 */
 Route::middleware('auth:sanctum')->group(function () {
 
+    // Chat
+    Route::post('/chat/customer', [ChatProcessController::class, 'process'])
+        ->name('chat.customer');
+
+
+
+    Route::get('/chat/messages', [ChatMessagesController::class, 'index']);
+
+
+    Route::get('/analytics/top-products', [AnalyticsController::class, 'topProducts']);
+    Route::get('/analytics/peak-hours', [AnalyticsController::class, 'peakHours']);
+    Route::get('/analytics/rfm', [AnalyticsController::class, 'rfm']);
+    Route::get('/analytics/market-basket', [AnalyticsController::class, 'marketBasket']);
+    Route::get('/analytics/daily-anomalies', [AnalyticsController::class, 'dailyAnomalies']);
     // Sesión
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', function (Request $request) {
@@ -139,6 +144,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/admin/users', [AdminUserController::class, 'index']);
         Route::post('/admin/users', [AdminUserController::class, 'store']);
         Route::delete('/admin/users/{id}', [AdminUserController::class, 'destroy']);
+
     });
 
     // Órdenes del usuario autenticado
@@ -164,10 +170,10 @@ Route::prefix('v1')->group(function () {
         Route::put('/products/{id}', [ApiProductController::class, 'update']);
         Route::delete('/products/{id}', [ApiProductController::class, 'destroy']);
     });
+
+});
+// routes/api.php
+Route::middleware(['auth:sanctum','admin'])->group(function () {
+  Route::post('/admin/chat', [\App\Http\Controllers\AdminChatController::class, 'process']);
 });
 
-Route::get('/analytics/top-products', [AnalyticsController::class, 'topProducts']);
-Route::get('/analytics/peak-hours', [AnalyticsController::class, 'peakHours']);
-Route::get('/analytics/rfm', [AnalyticsController::class, 'rfm']);
-Route::get('/analytics/market-basket', [AnalyticsController::class, 'marketBasket']);
-Route::get('/analytics/daily-anomalies', [AnalyticsController::class, 'dailyAnomalies']);

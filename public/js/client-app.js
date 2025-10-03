@@ -22258,6 +22258,23 @@ __webpack_require__.r(__webpack_exports__);
 
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = ({
   name: 'ChatWidget',
+  props: {
+    // 'customer' | 'admin'
+    mode: {
+      type: String,
+      default: 'customer'
+    },
+    // Si lo pasas, se usa tal cual. Si no, se resuelve por 'mode'
+    endpoint: {
+      type: String,
+      default: ''
+    },
+    // Mensaje inicial (bienvenida/instrucciones) mostrado como assistant
+    prompt: {
+      type: String,
+      default: ''
+    }
+  },
   data() {
     return {
       text: '',
@@ -22267,6 +22284,13 @@ __webpack_require__.r(__webpack_exports__);
       conversationId: null
     };
   },
+  computed: {
+    // Decide automáticamente el endpoint según el modo, a menos que lo fuerces por prop
+    endpointUrl() {
+      if (this.endpoint && this.endpoint.trim()) return this.endpoint.trim();
+      return this.mode === 'admin' ? '/api/admin/chat' : '/api/chat/customer';
+    }
+  },
   methods: {
     scrollToBottom() {
       this.$nextTick(() => {
@@ -22275,13 +22299,10 @@ __webpack_require__.r(__webpack_exports__);
         }
       });
     },
-    // Parser robusto de URLs:
-    // - Detecta http(s):// hasta el primer espacio o cierre ) ] } o final de línea
-    // - Evita arrastrar puntuación final común como .,;:
+    // Parser robusto de URLs (conservado)
     linkifySegments(raw) {
       const text = String(raw ?? '');
       const lines = text.split(/\r?\n/);
-      //      url
       const urlRe = /(https?:\/\/[^\s)\]}]+[^\s)\]}.,;:!?])/gi;
       const out = [];
       lines.forEach((line, idx) => {
@@ -22316,8 +22337,6 @@ __webpack_require__.r(__webpack_exports__);
           });
         }
       });
-
-      // Debug: comenta esta línea si no lo quieres
       console.debug('[linkifySegments]', {
         raw: text,
         segments: out
@@ -22338,9 +22357,10 @@ __webpack_require__.r(__webpack_exports__);
       this.scrollToBottom();
       this.text = '';
       try {
+        // ⬇️ Usa el endpoint dinámico
         const {
           data
-        } = await _axios_config__WEBPACK_IMPORTED_MODULE_0__["default"].post('/api/chat/process', {
+        } = await _axios_config__WEBPACK_IMPORTED_MODULE_0__["default"].post(this.endpointUrl, {
           text: t
         });
         if (data?.reply) {
@@ -22368,6 +22388,8 @@ __webpack_require__.r(__webpack_exports__);
           after_id: this.lastId
         };
         if (this.conversationId) params.conversation_id = this.conversationId;
+
+        // El feed de mensajes puede ser compartido
         const {
           data
         } = await _axios_config__WEBPACK_IMPORTED_MODULE_0__["default"].get('/api/chat/messages', {
@@ -22401,7 +22423,7 @@ __webpack_require__.r(__webpack_exports__);
           }
         });
         if (data?.conversation_id) this.conversationId = data.conversation_id;
-        if (Array.isArray(data?.messages)) {
+        if (Array.isArray(data?.messages) && data.messages.length) {
           data.messages.forEach(m => {
             this.messages.push({
               id: m.id,
@@ -22411,8 +22433,26 @@ __webpack_require__.r(__webpack_exports__);
             this.lastId = Math.max(this.lastId, m.id);
           });
           this.scrollToBottom();
+        } else if (this.prompt) {
+          // Si no hay historial y tenemos prompt, lo mostramos como bienvenida
+          this.messages.push({
+            id: `p-${Date.now()}`,
+            role: 'assistant',
+            text: String(this.prompt)
+          });
+          this.scrollToBottom();
         }
-      } catch {}
+      } catch {
+        // si falla, al menos muestra el prompt
+        if (this.prompt) {
+          this.messages.push({
+            id: `p-${Date.now()}`,
+            role: 'assistant',
+            text: String(this.prompt)
+          });
+          this.scrollToBottom();
+        }
+      }
     }
   },
   async mounted() {
@@ -23107,7 +23147,7 @@ const SID_KEY = 'chat_sid_v1';
       try {
         const {
           data
-        } = await _axios_config__WEBPACK_IMPORTED_MODULE_1__["default"].post('/api/chat/process', {
+        } = await _axios_config__WEBPACK_IMPORTED_MODULE_1__["default"].post('/api/chat/customer', {
           session_id: this.sid,
           text: t
         });

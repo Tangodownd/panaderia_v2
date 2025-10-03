@@ -111,6 +111,8 @@
           axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
           
           // Redirigir al panel de administración
+          // Notificar a otras partes (AdminApp) que cambió autenticación
+          try { window.dispatchEvent(new Event('auth-changed')) } catch {}
           router.push({ name: 'adminDashboard' });
         } catch (err) {
           console.error('Error de inicio de sesión:', err);

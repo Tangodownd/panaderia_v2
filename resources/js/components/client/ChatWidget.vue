@@ -30,6 +30,16 @@ import axios from '@/axios-config' // asegúrate de usar tu config
 
 export default {
   name: 'ChatWidget',
+
+  props: {
+    // 'customer' | 'admin'
+    mode: { type: String, default: 'customer' },
+    // Si lo pasas, se usa tal cual. Si no, se resuelve por 'mode'
+    endpoint: { type: String, default: '' },
+    // Mensaje inicial (bienvenida/instrucciones) mostrado como assistant
+    prompt: { type: String, default: '' }
+  },
+
   data() {
     return {
       text: '',
@@ -39,22 +49,28 @@ export default {
       conversationId: null
     }
   },
+
+  computed: {
+    // Decide automáticamente el endpoint según el modo, a menos que lo fuerces por prop
+    endpointUrl() {
+      if (this.endpoint && this.endpoint.trim()) return this.endpoint.trim()
+      return this.mode === 'admin' ? '/api/admin/chat' : '/api/chat/customer'
+    }
+  },
+
   methods: {
     scrollToBottom() {
       this.$nextTick(() => {
         if (this.$refs.scroll) {
-          this.$refs.scroll.scrollTop = this.$refs.scroll.scrollHeight;
+          this.$refs.scroll.scrollTop = this.$refs.scroll.scrollHeight
         }
-      });
+      })
     },
 
-    // Parser robusto de URLs:
-    // - Detecta http(s):// hasta el primer espacio o cierre ) ] } o final de línea
-    // - Evita arrastrar puntuación final común como .,;:
+    // Parser robusto de URLs (conservado)
     linkifySegments(raw) {
       const text = String(raw ?? '')
       const lines = text.split(/\r?\n/)
-      //      url
       const urlRe = /(https?:\/\/[^\s)\]}]+[^\s)\]}.,;:!?])/gi
 
       const out = []
@@ -72,7 +88,11 @@ export default {
             out.push({ type: 'text', text: line.slice(last, start) })
           }
 
-          const isInvoice = /\/api\/orders\/\d+\/invoice(?:\?|$)/i.test(url) || /\/orders\/\d+\/invoice(?:\?|$)/i.test(url) || /\/invoice\.pdf(?:\?|$)/i.test(url)
+          const isInvoice =
+            /\/api\/orders\/\d+\/invoice(?:\?|$)/i.test(url) ||
+            /\/orders\/\d+\/invoice(?:\?|$)/i.test(url) ||
+            /\/invoice\.pdf(?:\?|$)/i.test(url)
+
           out.push({
             type: 'link',
             href: url,
@@ -87,7 +107,6 @@ export default {
         }
       })
 
-      // Debug: comenta esta línea si no lo quieres
       console.debug('[linkifySegments]', { raw: text, segments: out })
       return out
     },
@@ -104,9 +123,15 @@ export default {
       this.text = ''
 
       try {
-        const { data } = await axios.post('/api/chat/process', { text: t })
+        // ⬇️ Usa el endpoint dinámico
+        const { data } = await axios.post(this.endpointUrl, { text: t })
+
         if (data?.reply) {
-          this.messages.push({ id: `a-${Date.now()}`, role: 'assistant', text: String(data.reply ?? '') })
+          this.messages.push({
+            id: `a-${Date.now()}`,
+            role: 'assistant',
+            text: String(data.reply ?? '')
+          })
           this.scrollToBottom()
         }
         if (data?.conversation_id) this.conversationId = data.conversation_id
@@ -126,10 +151,13 @@ export default {
         const params = { after_id: this.lastId }
         if (this.conversationId) params.conversation_id = this.conversationId
 
+        // El feed de mensajes puede ser compartido
         const { data } = await axios.get('/api/chat/messages', { params })
+
         if (data?.conversation_id && !this.conversationId) {
           this.conversationId = data.conversation_id
         }
+
         if (Array.isArray(data?.messages) && data.messages.length) {
           data.messages.forEach(m => {
             this.messages.push({
@@ -148,9 +176,12 @@ export default {
 
     async initialLoad() {
       try {
-        const { data } = await axios.get('/api/chat/messages', { params: { limit: 50 } })
+        const { data } = await axios.get('/api/chat/messages', {
+          params: { limit: 50 }
+        })
         if (data?.conversation_id) this.conversationId = data.conversation_id
-        if (Array.isArray(data?.messages)) {
+
+        if (Array.isArray(data?.messages) && data.messages.length) {
           data.messages.forEach(m => {
             this.messages.push({
               id: m.id,
@@ -160,19 +191,40 @@ export default {
             this.lastId = Math.max(this.lastId, m.id)
           })
           this.scrollToBottom()
+        } else if (this.prompt) {
+          // Si no hay historial y tenemos prompt, lo mostramos como bienvenida
+          this.messages.push({
+            id: `p-${Date.now()}`,
+            role: 'assistant',
+            text: String(this.prompt)
+          })
+          this.scrollToBottom()
         }
-      } catch {}
+      } catch {
+        // si falla, al menos muestra el prompt
+        if (this.prompt) {
+          this.messages.push({
+            id: `p-${Date.now()}`,
+            role: 'assistant',
+            text: String(this.prompt)
+          })
+          this.scrollToBottom()
+        }
+      }
     }
   },
+
   async mounted() {
     await this.initialLoad()
     this.pollTimer = setInterval(this.pull, 3000)
   },
+
   beforeUnmount() {
     if (this.pollTimer) clearInterval(this.pollTimer)
   }
 }
 </script>
+
 
 <style scoped>
 .chatbox{border:1px solid #ddd;border-radius:10px;max-width:380px;display:flex;flex-direction:column;height:420px}

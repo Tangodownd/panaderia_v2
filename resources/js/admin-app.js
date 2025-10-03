@@ -3,6 +3,7 @@ import { createApp } from "vue"
 import AdminApp from "./components/admin/AdminApp.vue"
 import router from "./routes-admin"
 import auth from "./services/auth"
+import ChatWidget from "./components/client/ChatWidget.vue"
 
 // Usa la misma instancia de Axios en toda la app
 import axios from "./axios-config"
@@ -54,4 +55,5 @@ axios.interceptors.response.use(
 
 const app = createApp(AdminApp)
 app.use(router)
+app.component('ChatWidget', ChatWidget)
 app.mount("#admin-app")
